@@ -37,6 +37,23 @@ rendimiento a lo largo del tiempo."
   conflicto, rechaza la operación, avisa al usuario y le muestra la versión actual para que decida si
   repite su cambio. Los cambios pendientes de sincronizar nunca sobrescriben en silencio información
   más reciente.
+- Q: ¿Cómo se tratan las series con peso 0 en volumen y 1RM? → A: Se permiten (peso corporal). Su
+  volumen de carga externa es 0 y no se calcula 1RM estimado para ellas.
+- Q: Si se iguala un récord, ¿qué fecha se conserva? → A: La de la primera vez que se alcanzó ese
+  valor. Igualar un récord no es un nuevo récord.
+- Q: ¿Se avisa de nuevo récord en la primera sesión de un ejercicio? → A: No. Los resultados del
+  primer entrenamiento con ese ejercicio son la referencia inicial y no generan avisos.
+- Q: ¿Cuándo se comprueba y se avisa del récord de volumen? → A: Al terminar el ejercicio, solo si el
+  volumen de ese ejercicio en la sesión supera el mayor volumen anterior. El usuario termina un
+  ejercicio con un botón "Terminar ejercicio"; los que no se terminaron así se comprueban al
+  finalizar el entrenamiento.
+- Q: Si un ejercicio terminado se reabre y se vuelve a terminar, ¿se comprueba otra vez el récord de
+  volumen? → A: Sí. Se avisa solo si hay un nuevo récord que todavía no se haya notificado, es decir,
+  si el volumen supera tanto el récord anterior como el último volumen ya notificado en esa sesión.
+- Q: ¿Qué cuenta como sesión anterior y qué pasa si una métrica aún no tiene valor? → A: Una sesión
+  anterior es un entrenamiento finalizado, distinto del actual, con al menos una serie de ese
+  ejercicio. Si una métrica todavía no tiene valor anterior (por ejemplo, el 1RM de un ejercicio que
+  antes solo se hizo con peso 0), su primer valor es la referencia inicial y no genera aviso.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -140,10 +157,21 @@ las métricas, la evolución y los récords mostrados coinciden con los valores 
    ver la tabla, **Then** tiene los mismos datos en formato de tabla.
 4. **Given** un ejercicio, **When** el usuario consulta sus récords personales, **Then** ve el mayor
    peso, el mejor 1RM estimado y el mayor volumen en una sesión, cada uno con su fecha.
-5. **Given** un entrenamiento en curso, **When** el usuario registra una serie que supera uno de sus
-   récords personales para ese ejercicio, **Then** se le avisa en ese momento de que es un nuevo
-   récord.
-6. **Given** un ejercicio con una sola sesión, **When** el usuario abre su progreso, **Then** ve los
+5. **Given** un entrenamiento en curso con un ejercicio que ya tiene sesiones anteriores, **When** el
+   usuario registra una serie que supera su récord de peso máximo o de 1RM estimado para ese
+   ejercicio, **Then** se le avisa en ese momento de que es un nuevo récord. Igualar un récord no
+   genera aviso.
+6. **Given** un entrenamiento en curso con un ejercicio que ya tiene sesiones anteriores, **When** el
+   usuario pulsa "Terminar ejercicio" (o finaliza el entrenamiento sin haberlo terminado) y el
+   volumen de ese ejercicio en la sesión supera su mayor volumen anterior, **Then** se le avisa de
+   que es un nuevo récord de volumen.
+7. **Given** un ejercicio terminado cuyo récord de volumen ya se notificó, **When** el usuario lo
+   reabre, añade series y lo vuelve a terminar, **Then** se le avisa de nuevo solo si el volumen
+   supera el último volumen ya notificado; si no lo supera, no hay aviso.
+8. **Given** la primera sesión en la que el usuario registra un ejercicio, **When** registra series
+   o termina el ejercicio, **Then** no se muestra ningún aviso de récord y esos resultados quedan
+   como referencia inicial.
+9. **Given** un ejercicio con una sola sesión, **When** el usuario abre su progreso, **Then** ve los
    datos de esa sesión y un aviso de que hacen falta más sesiones para ver una tendencia.
 
 ---
@@ -218,7 +246,13 @@ registrado no cambia.
   mensaje claro junto al campo. Se acepta un peso de 0 (ejercicios con el peso corporal). No hay
   límite de series por ejercicio.
 - **Ejercicios con el peso corporal o con lastre**: se puede registrar una serie sin peso (solo
-  repeticiones) o con peso añadido.
+  repeticiones) o con peso añadido. Una serie con peso 0 tiene volumen de carga externa 0 y no se
+  usa para el 1RM estimado. Si todas las series de una sesión tienen peso 0, esa sesión no tiene 1RM
+  estimado.
+- **Empate con un récord**: igualar un récord no es un nuevo récord; se conserva la fecha de la
+  primera vez que se alcanzó ese valor y no se muestra aviso.
+- **Primera sesión de un ejercicio**: no se muestran avisos de récord; sus resultados son la
+  referencia inicial.
 - **Entrenamiento olvidado en curso**: si un entrenamiento lleva más de 12 horas sin actividad, al
   volver se le pregunta al usuario si quiere finalizarlo (con la hora de la última serie como hora
   de fin) o descartarlo.
@@ -236,7 +270,9 @@ registrado no cambia.
 - **Nombres de ejercicio duplicados**: no se puede crear un ejercicio propio con el mismo nombre que
   otro existente (sin distinguir mayúsculas ni tildes). Se sugiere usar el existente.
 - **Eliminar un ejercicio propio que ya se usó**: se avisa de cuántos entrenamientos lo contienen y
-  no se permite eliminarlo mientras tenga series. Sí se puede renombrar.
+  no se permite eliminarlo mientras tenga series. Sí se puede renombrar. Tampoco se permite
+  eliminarlo mientras forme parte de alguna rutina: se indica en cuáles está para que el usuario lo
+  quite antes (así ninguna rutina se queda sin ejercicios, FR-028).
 - **Fechas y zonas horarias**: un entrenamiento cerca de medianoche o registrado en otra zona horaria
   aparece en el día local en el que se hizo.
 - **Historial muy grande**: con cientos de entrenamientos, el historial y el progreso siguen
@@ -307,12 +343,23 @@ registrado no cambia.
   volumen total y el 1RM estimado, en forma de gráfico y de tabla equivalente.
 - **FR-020**: El 1RM estimado MUST calcularse con la fórmula de Epley, peso × (1 + repeticiones / 30),
   tomando la mejor serie de la sesión. Para series de 1 repetición, el 1RM estimado es el propio peso.
-  Las series de más de 12 repeticiones no se usan para el 1RM.
+  Las series de más de 12 repeticiones y las series con peso 0 no se usan para el 1RM. El volumen
+  (de carga externa) de una serie es peso × repeticiones, así que una serie con peso 0 aporta
+  volumen 0.
 - **FR-021**: El sistema MUST mantener, para cada ejercicio, los récords personales (mayor peso, mejor
   1RM estimado y mayor volumen en una sesión) con la fecha en que se lograron, y MUST recalcularlos
-  cuando se editan o eliminan datos.
-- **FR-022**: El sistema MUST avisar durante el entrenamiento cuando una serie establece un nuevo
-  récord personal.
+  cuando se editan o eliminan datos. Un récord solo cambia cuando un valor lo **supera**; ante un
+  empate se conserva la fecha de la primera vez que se alcanzó.
+- **FR-022**: El sistema MUST avisar durante el entrenamiento cuando se establece un nuevo récord
+  personal, excepto en la primera sesión en la que se registra ese ejercicio, cuyos resultados son
+  la referencia inicial. Una sesión anterior es un entrenamiento finalizado, distinto del actual, con
+  al menos una serie de ese ejercicio. Si una métrica todavía no tiene valor anterior, su primer
+  valor es también la referencia inicial y no genera aviso. Los récords de peso máximo y de 1RM estimado se comprueban al registrar cada
+  serie. El récord de volumen se comprueba cuando el usuario pulsa "Terminar ejercicio" o, para los
+  ejercicios que no se terminaron así, al finalizar el entrenamiento; se avisa solo si el volumen de
+  ese ejercicio en la sesión supera el mayor volumen de una sesión anterior. Si un ejercicio se
+  reabre y se vuelve a terminar, la comprobación se repite y solo se avisa si el volumen supera
+  también el último volumen ya notificado en esa sesión (no se repiten avisos).
 - **FR-023**: Los usuarios MUST poder limitar la vista de progreso a un periodo: último mes, 3 meses,
   1 año o todo.
 
@@ -350,7 +397,8 @@ registrado no cambia.
   inicio, hora de fin, un estado (en curso o finalizado) y una nota opcional. Contiene una lista
   ordenada de ejercicios realizados.
 - **Ejercicio realizado**: un ejercicio dentro de un entrenamiento concreto, con su posición en la
-  sesión y una nota opcional. Contiene una lista ordenada de series.
+  sesión, una nota opcional y si el usuario lo marcó como terminado. Contiene una lista ordenada de
+  series.
 - **Serie**: una ejecución con unas repeticiones y un peso (guardado en una unidad canónica). Tiene
   un orden dentro del ejercicio realizado y el momento en que se registró.
 - **Récord personal**: el mejor valor de un usuario en un ejercicio para una métrica (peso máximo,
