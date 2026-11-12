@@ -2,14 +2,35 @@
   "name": "gymtrack",
   "version": "0.1.0",
   "private": true,
-  "engines": { "node": ">=22 <23", "npm": ">=10" },
-  "workspaces": ["backend", "frontend", "packages/domain"],
+  "engines": {
+    "node": ">=22 <23",
+    "npm": ">=10"
+  },
+  "workspaces": [
+    "backend",
+    "frontend",
+    "packages/domain"
+  ],
   "scripts": {
-    "build": "npm run build --workspace backend",
-    "typecheck": "npm run typecheck --workspace backend",
-    "dev": "npm run dev --workspace backend",
+    "build": "npm run build --workspaces",
+    "typecheck": "npm run typecheck --workspaces",
+    "dev": "node scripts/dev.mjs",
     "db:migrate": "npm run db:migrate --workspace backend",
     "db:migrate:test": "npm run db:migrate:test --workspace backend",
-    "test:backend": "npm run test --workspace backend"
+    "test:backend": "npm run test --workspace backend",
+    "test:domain": "npm run test --workspace @gymtrack/domain",
+    "test:frontend": "npm run test --workspace @gymtrack/frontend",
+    "test:e2e": "node scripts/e2e.mjs",
+    "lint": "eslint . --max-warnings 0",
+    "perf": "node scripts/perf.mjs"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.0.0",
+    "eslint": "^9.0.0",
+    "typescript-eslint": "^8.0.0",
+    "globals": "^16.0.0",
+    "@playwright/test": "^1.56.0",
+    "@axe-core/playwright": "^4.10.0",
+    "lighthouse": "^13.0.0"
   }
 }
