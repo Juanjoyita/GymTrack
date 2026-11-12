@@ -1,0 +1,7 @@
+module.exports = {
+  preset: 'ts-jest',
+  testEnvironment: 'node',
+  testMatch: ['<rootDir>/test/**/*.e2e-spec.ts'],
+  testTimeout: 30000,
+  clearMocks: true
+};
