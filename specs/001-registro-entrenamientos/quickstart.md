@@ -10,23 +10,25 @@ forman parte del plan y deben respetarse.
 
 - Node.js 22 LTS y npm 10+
 - Docker Desktop (o Docker Engine + Docker Compose v2)
+- mkcert para generar y confiar certificados locales (claves fuera del repositorio).
 - Google Chrome estable (pruebas de rendimiento y accesibilidad)
 
 ## Puesta en marcha
 
 ```bash
 cp .env.example .env              # valores de desarrollo; nunca se suben secretos al repositorio
-docker compose up -d              # PostgreSQL 16 (dev y test) + Mailpit
 npm install                       # instala los tres workspaces
+npm run tls:local                 # genera certificados locales confiables para frontend/API/Mailpit
+docker compose up -d              # PostgreSQL 16 (dev y test); Mailpit disponible desde T043A
 npm run db:migrate                # aplica migraciones, incluido el catálogo de 50 ejercicios
-npm run dev                       # backend en :3000 y frontend en :5173
+npm run dev                       # backend HTTPS en :3000 y frontend HTTPS en :5173
 ```
 
 | Servicio | URL |
 |---|---|
-| Aplicación | http://localhost:5173 |
-| API | http://localhost:3000/api |
-| Mailpit (correos de prueba) | http://localhost:8025 |
+| Aplicación | https://localhost:5173 |
+| API | https://localhost:3000/api |
+| Mailpit (desde T043A, correos de prueba) | https://localhost:8025 |
 
 ## Ejecutar las pruebas
 
@@ -62,8 +64,7 @@ contrato están en [data-model.md](./data-model.md) y [contracts/api.md](./contr
 2. Contar las interacciones por serie con el ejercicio seleccionado → **≤ 3**.
 3. Añadir "Sentadilla", registrar 2 series y finalizar.
 
-**Esperado**: el resumen muestra 2 ejercicios, 5 series y el volumen correcto; el historial lo
-incluye con su duración.
+**Esperado**: el resumen muestra 2 ejercicios, 5 series y el volumen correcto; en P1 se compara la persistencia exacta contra el fixture en la BD y se comprueba el prellenado tras reingresar, sin usar consultas ni pantallas P2. La inclusión en la pantalla de historial se verifica en V8.
 
 ### V3 — Prellenado con la última sesión (US1 escenario 7, FR-009)
 
@@ -89,12 +90,12 @@ API (validación idéntica en interfaz y servidor).
 
 ### V5 — Sin conexión y recarga (FR-012, SC-004)
 
-1. Con un entrenamiento en curso, cortar la red (DevTools → *Offline*) y registrar 3 series.
+1. Servir el build de producción por HTTPS, cargar online y esperar a que el service worker controle la página y complete el precaché del shell. Con un entrenamiento en curso, cortar la red (DevTools → *Offline*) y registrar 3 series.
 2. Recargar la página sin red y cerrar y reabrir la pestaña.
-3. Restablecer la red.
+3. Registrar otra serie tras la recarga/reapertura todavía sin red y restablecer la conexión.
 
-**Esperado**: las 3 series siguen visibles y marcadas como pendientes; al volver la conexión se
-sincronizan y el indicador de pendientes llega a 0. En la base de datos hay exactamente 3 series
+**Esperado**: las series introducidas siguen visibles y marcadas como pendientes; al volver la conexión se
+sincronizan y el indicador de pendientes llega a 0. En la base de datos hay exactamente 4 series
 nuevas (sin duplicados). Cubierto por el E2E `offline.spec`.
 
 ### V6 — Conflicto entre dos dispositivos (FR-031)
@@ -168,3 +169,9 @@ tiene una tabla equivalente. El fixture incluye obligatoriamente estos casos (FR
   registrar una serie < 100 ms.
 - Con 500 entrenamientos sembrados (`npm run db:seed:carga`), el historial y el progreso cargan en
   < 2 s.
+
+## Entrega y verificaciones por incremento
+
+En T029 se ejecutan V1–V7 sin pantalla de historial, accesibilidad y rendimiento del MVP: primera carga <3 s en al menos 4/5 ejecuciones con todas las cachés vacías y respuesta visual local <100 ms, usando el perfil constitucional. V5 se ejecuta por separado tras preparar la caché estática online. El script `perf` admite el incremento P1 sin exigir rutas de P2/P3; al cierre añade la medición con 500 entrenamientos.
+
+Mailpit y el fixture SMTP deben estar operativos antes de ejecutar la aceptación roja de P4; el correo sintético de infraestructura no implementa recuperación. El README se redacta en T061A y un segundo integrante verifica sus instrucciones desde entorno limpio en T061B antes de T062.

@@ -104,11 +104,11 @@ se reevalúa aquí. Cada decisión sigue el formato Decisión / Razón / Alterna
   el recurso existente sin duplicarlo. La interfaz muestra un indicador "N cambios pendientes de
   sincronizar" y marca cada serie pendiente.
 - **Razón**: cumple SC-004 (0 % de series confirmadas perdidas) con recarga, cierre de pestaña y
-  pérdida de conexión, sin *service worker* ni base de datos en el navegador. El volumen de datos de
+  pérdida de conexión mediante persistencia local. Para cargar el shell tras recarga o reapertura offline se añade un service worker mínimo (revisión de consistencia 2026-11-12): precaché versionado de HTML/JS/CSS, sin cachear API, credenciales ni respuestas personales, sin Background Sync. Se registra durante la primera carga online y se verifica que controla la página antes de declarar disponibilidad offline. El volumen de datos de
   un entrenamiento (decenas de series) cabe holgadamente en `localStorage`. La spec no exige que la
   app funcione sin conexión desde el primer uso.
 - **Alternativas**: IndexedDB (API asíncrona más compleja, innecesaria para este volumen); *service
-  worker* con *Background Sync* (complejidad alta y soporte desigual en Safari); librerías de
+  worker* con *Background Sync* para enviar operaciones (complejidad alta y soporte desigual en Safari); librerías de
   sincronización como RxDB o PouchDB (dependencia y modelo de datos ajenos al stack).
 
 ## R-09. Conflictos entre dispositivos (FR-031)
