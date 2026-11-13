@@ -7,8 +7,8 @@
     "typecheck": "tsc --noEmit",
     "dev": "ts-node src/main.ts",
     "db:migrate": "typeorm-ts-node-commonjs migration:run -d src/database/data-source.ts",
-    "db:migrate:test": "NODE_ENV=test typeorm-ts-node-commonjs migration:run -d src/database/data-source.ts",
-    "test": "NODE_ENV=test jest --runInBand"
+    "db:migrate:test": "cross-env NODE_ENV=test typeorm-ts-node-commonjs migration:run -d src/database/data-source.ts",
+    "test": "cross-env NODE_ENV=test jest --runInBand"
   },
   "dependencies": {
     "@nestjs/common": "^11.0.0",
@@ -36,6 +36,7 @@
     "ts-jest": "^29.2.0",
     "ts-node": "^10.9.2",
     "typescript": "~5.9.3",
-    "@types/nodemailer": "^7.0.0"
+    "@types/nodemailer": "^7.0.0",
+    "cross-env": "^10.1.0"
   }
 }
