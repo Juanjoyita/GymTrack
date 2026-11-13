@@ -1,9 +1,14 @@
 import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
+import type { INestApplication } from '@nestjs/common';
+import { HttpExceptionFilter } from './comun/http-exception.filter';
+import { httpLogger } from './comun/http-logger';
 
-export function configureApi(app: { setGlobalPrefix(prefix: string): unknown }) {
+export function configureApi(app: INestApplication) {
   app.setGlobalPrefix('api');
+  app.use(httpLogger);
+  app.useGlobalFilters(new HttpExceptionFilter());
 }
 
 async function bootstrap() {

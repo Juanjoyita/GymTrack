@@ -8,7 +8,11 @@
     "dev": "ts-node src/main.ts",
     "db:migrate": "typeorm-ts-node-commonjs migration:run -d src/database/data-source.ts",
     "db:migrate:test": "cross-env NODE_ENV=test typeorm-ts-node-commonjs migration:run -d src/database/data-source.ts",
-    "test": "cross-env NODE_ENV=test jest --runInBand"
+    "test": "cross-env NODE_ENV=test jest --runInBand",
+    "pretest": "npm run build --workspace @gymtrack/domain",
+    "prebuild": "npm run build --workspace @gymtrack/domain",
+    "pretypecheck": "npm run build --workspace @gymtrack/domain",
+    "predev": "npm run build --workspace @gymtrack/domain"
   },
   "dependencies": {
     "@nestjs/common": "^11.0.0",
