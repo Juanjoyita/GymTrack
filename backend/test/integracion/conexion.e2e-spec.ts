@@ -1,7 +1,8 @@
 import { Controller, Get, INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { DataSource } from 'typeorm';
-import request from 'supertest';
+import { peticionHttps } from '../utils/https';
+import { opcionesTls } from '../../src/comun/tls';
 import { AppModule } from '../../src/app.module';
 import { configureApi } from '../../src/main';
 
@@ -17,7 +18,7 @@ describe('NestJS y TypeORM (base de pruebas)', () => {
   afterAll(async () => { await app?.close(); });
   it('inicializa NestJS y conecta a PostgreSQL sin sincronizar ni migrar automáticamente', async () => {
     const module = await Test.createTestingModule({ imports: [AppModule], controllers: [ConexionPrueba] }).compile();
-    app = module.createNestApplication({ logger: false });
+    app = module.createNestApplication({ logger: false, httpsOptions: opcionesTls() });
     configureApi(app);
     await app.init();
     const source = app.get(DataSource);
@@ -26,7 +27,7 @@ describe('NestJS y TypeORM (base de pruebas)', () => {
     expect(source.options.migrationsRun).toBe(false);
     const [row] = await source.query('SELECT current_database() AS base');
     expect(row.base).toBe('gymtrack_test');
-    await request(app.getHttpServer()).get('/api/conexion-prueba').expect(200, { disponible: true });
-    await request(app.getHttpServer()).get('/conexion-prueba').expect(404);
+    await peticionHttps(app).get('/api/conexion-prueba').expect(200, { disponible: true });
+    await peticionHttps(app).get('/conexion-prueba').expect(404);
   });
 });

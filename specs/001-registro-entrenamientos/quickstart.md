@@ -18,7 +18,7 @@ forman parte del plan y deben respetarse.
 ```bash
 cp .env.example .env              # valores de desarrollo; nunca se suben secretos al repositorio
 npm install                       # instala los tres workspaces
-npm run tls:local                 # genera certificados locales confiables para frontend/API/Mailpit
+npm run tls:local                 # genera y confía certificados locales; Mailpit se integra en T043A
 docker compose up -d              # PostgreSQL 16 (dev y test); Mailpit disponible desde T043A
 npm run db:migrate                # aplica migraciones, incluido el catálogo de 50 ejercicios
 npm run dev                       # backend HTTPS en :3000 y frontend HTTPS en :5173
@@ -30,9 +30,49 @@ npm run dev                       # backend HTTPS en :3000 y frontend HTTPS en :
 | API | https://localhost:3000/api |
 | Mailpit (desde T043A, correos de prueba) | https://localhost:8025 |
 
+## HTTPS local y entorno de entrega (T010A/T011)
+
+Instala mkcert (macOS: `brew install mkcert`) y ejecuta `npm run tls:local` con tu
+usuario habitual. En macOS, el script confía en la CA en el llavero **del usuario**;
+puede aparecer una autorización del sistema. En Linux usa `mkcert -install` y los
+prerrequisitos de confianza de su distribución. Reinicia los navegadores abiertos
+si no reconocen todavía la CA. La instalación global de macOS con `mkcert -install`
+requiere permisos administrativos y no es necesaria si el llavero del usuario ya confía.
+
+Certificado, clave y copia **pública** de la CA quedan en
+`~/.local/share/gymtrack/tls/`; la clave tiene permisos 600. La clave privada de la CA
+permanece en el CAROOT de mkcert. No se comparten ni versionan claves. Para cambiar
+el directorio, exporta `GYMTRACK_TLS_DIR` con una ruta absoluta antes de generar y
+arrancar los servicios. `TLS_CERT_PATH`, `TLS_KEY_PATH` y `TLS_CA_PATH` permiten usar
+archivos alternativos (rutas absolutas, o relativas a la raíz del proyecto). No hace
+falta sobrescribir un `.env` local existente: añade solo las variables necesarias.
+
+Frontend y API escuchan exclusivamente HTTPS en localhost:5173 y localhost:3000.
+El cliente usa `/api` en el mismo origen; Vite lo reenvía por HTTPS al backend y
+comprueba su certificado con la CA. No hace falta CORS para este flujo.
+Si faltan certificados, el arranque falla; no existe alternativa HTTP.
+
+`npm run test:e2e` inicia y cierra ambos servidores con `NODE_ENV=test`, sin reutilizar
+servidores de desarrollo. Usa Chrome estable instalado, viewport 360×800 y
+certificados comprobados (`ignoreHTTPSErrors: false`). El proceso Node recibe la
+CA **pública** mediante `NODE_EXTRA_CA_CERTS`; Supertest también usa HTTPS y CA explícita.
+Los tests acceden solo a `gymtrack_test`, con fixtures en esquema aislado. Los puertos
+3000/5173 deben estar libres antes de ejecutar E2E. Captura: `test-results/e2e/`.
+
+Para la entrega, servir `frontend/dist` en un hosting HTTPS y conservar `/api` en el
+mismo origen mediante proxy hacia la API HTTPS. El servidor debe recibir la cadena
+completa del certificado válido para su dominio y la clave mediante `TLS_CERT_PATH`
+y `TLS_KEY_PATH` (montaje/secretos del entorno, fuera de Git); la CA pública o privada
+debe ser confiable para el proxy. El backend escucha localhost:3000, adecuado para
+un proxy en el mismo host. No se usa la CA personal de mkcert en producción ni se
+desactiva la validación TLS. Esta tarea documenta la configuración; no despliega un
+entorno remoto. Mailpit HTTPS se integra en T043A; cookies Secure se verifican tras
+autenticación en T023/T029.
+
 ## Ejecutar las pruebas
 
 ```bash
+npm test                  # todos los arneses existentes, incluido E2E HTTPS
 npm run test:domain       # unitarios de packages/domain (Vitest)
 npm run test:backend      # integración de la API contra gymtrack_test (Jest + Supertest)
 npm run test:frontend     # componentes y cola de sincronización (Vitest + RTL)
