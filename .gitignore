@@ -10,3 +10,9 @@ coverage/
 playwright-report/
 test-results/
 *.tsbuildinfo
+
+# Certificados locales y claves privadas
+.certs/
+*.pem
+*.key
+*.p12

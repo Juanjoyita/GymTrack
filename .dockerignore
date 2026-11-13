@@ -7,3 +7,9 @@ node_modules/
 *.log*
 Dockerfile*
 .dockerignore
+
+# Certificados locales y claves privadas
+.certs/
+*.pem
+*.key
+*.p12

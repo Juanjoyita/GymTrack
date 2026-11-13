@@ -13,7 +13,7 @@
   ],
   "scripts": {
     "build": "npm run build --workspaces",
-    "typecheck": "npm run typecheck --workspaces",
+    "typecheck": "npm run typecheck --workspaces && npm run typecheck:e2e",
     "dev": "node scripts/dev.mjs",
     "db:migrate": "npm run db:migrate --workspace backend",
     "db:migrate:test": "npm run db:migrate:test --workspace backend",
@@ -22,7 +22,11 @@
     "test:frontend": "npm run test --workspace @gymtrack/frontend",
     "test:e2e": "node scripts/e2e.mjs",
     "lint": "eslint . --max-warnings 0",
-    "perf": "node scripts/perf.mjs"
+    "perf": "node scripts/perf.mjs",
+    "tls:local": "bash scripts/tls-local.sh",
+    "test": "npm run test:domain && npm run test:backend && npm run test:frontend && npm run test:e2e",
+    "prebuild": "npm run build --workspace @gymtrack/domain",
+    "typecheck:e2e": "tsc --noEmit -p e2e/tsconfig.json"
   },
   "devDependencies": {
     "@eslint/js": "^9.0.0",

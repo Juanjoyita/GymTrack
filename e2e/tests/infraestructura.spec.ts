@@ -32,6 +32,7 @@ test.afterAll(async () => {
 
 test('conecta a gymtrack_test, crea dos usuarios aislados y captura el viewport móvil', async ({ page }, testInfo) => {
   const [database] = await source.query('SELECT current_database() AS database, current_schema() AS schema');
+  if (source.options.type !== 'postgres') throw new Error('Se requiere PostgreSQL de pruebas.');
   expect(database).toEqual({ database: 'gymtrack_test', schema: source.options.schema });
 
   const users = await crearDosUsuariosPrueba(source);
@@ -42,7 +43,24 @@ test('conecta a gymtrack_test, crea dos usuarios aislados y captura el viewport 
   expect(await source.getRepository('Usuario').count()).toBe(2);
 
   expect(page.viewportSize()).toEqual({ width: 360, height: 800 });
-  await page.setContent('<main><h1>Infraestructura E2E</h1><p>Viewport móvil de 360 × 800.</p></main>');
+  // Navegación real: el navegador debe confiar en la CA, sin excepciones TLS.
+  await page.goto('/');
+  await expect(page.getByRole('heading', { name: 'Entrenar', exact: true })).toBeVisible();
+  expect(await page.evaluate(() => window.isSecureContext)).toBe(true);
+  await expect(async () => {
+    const ready = await page.request.get('https://localhost:3000/api');
+    expect(ready.status()).toBe(404);
+  }).toPass({ timeout: 30000 });
+  const api = await page.request.get('https://localhost:3000/api');
+  expect(api.status()).toBe(404); // Aún no hay módulos de historias.
+  expect(await api.json()).toMatchObject({ codigo: 'NO_ENCONTRADO' });
+  const viaProxy = await page.evaluate(async () => {
+    const response = await fetch('/api', { credentials: 'include' });
+    return { status: response.status, body: await response.json() };
+  });
+  expect(viaProxy).toMatchObject({ status: 404, body: { codigo: 'NO_ENCONTRADO' } });
+  await expect(page.request.get('http://localhost:3000/api')).rejects.toThrow();
+  await expect(page.request.get('http://localhost:5173/')).rejects.toThrow();
   const screenshotPath = testInfo.outputPath('infraestructura-360x800.png');
   await page.screenshot({ path: screenshotPath, fullPage: true });
   await testInfo.attach('infraestructura-360x800.png', {

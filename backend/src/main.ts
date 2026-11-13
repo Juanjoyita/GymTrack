@@ -4,6 +4,7 @@ import { AppModule } from './app.module';
 import type { INestApplication } from '@nestjs/common';
 import { HttpExceptionFilter } from './comun/http-exception.filter';
 import { httpLogger } from './comun/http-logger';
+import { opcionesTls } from './comun/tls';
 
 export function configureApi(app: INestApplication) {
   app.setGlobalPrefix('api');
@@ -12,17 +13,16 @@ export function configureApi(app: INestApplication) {
 }
 
 async function bootstrap() {
-  // No public listener until HTTPS is configured in T010A.
-  const app = await NestFactory.create(AppModule, { logger: false });
+  const app = await NestFactory.create(AppModule, { logger: false, httpsOptions: opcionesTls() });
   configureApi(app);
   app.enableShutdownHooks();
-  await app.init();
-  console.info('NestJS inicializado; conexión PostgreSQL disponible. Sin listener web hasta T010A.');
+  await app.listen(3000, 'localhost');
+  console.info('API HTTPS disponible en https://localhost:3000/api.');
 }
 
 if (require.main === module) {
   bootstrap().catch(() => {
-    console.error('No se pudo iniciar NestJS. Revisa la configuración y la disponibilidad de PostgreSQL.');
+    console.error('No se pudo iniciar NestJS. Revisa los certificados HTTPS, la configuración y PostgreSQL.');
     process.exitCode = 1;
   });
 }

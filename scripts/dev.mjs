@@ -1,14 +1,22 @@
 import { spawn } from 'node:child_process';
 
 const children = ['backend', 'frontend'].map((workspace) =>
-  spawn('npm', ['run', 'dev', '--workspace', workspace], { stdio: 'inherit' }),
+  spawn('npm', ['run', 'dev', '--workspace', workspace], { stdio: 'inherit', detached: process.platform !== 'win32' }),
 );
 let stopping = false;
 function stop(code) {
   if (stopping) return;
   stopping = true;
   process.exitCode = code;
-  for (const child of children) child.kill('SIGTERM');
+  for (const child of children) {
+    if (!child.pid) continue;
+    try {
+      if (process.platform === 'win32') spawn('taskkill', ['/pid', String(child.pid), '/T', '/F']);
+      else process.kill(-child.pid, 'SIGTERM');
+    } catch (error) {
+      if (error.code !== 'ESRCH') throw error;
+    }
+  }
 }
 for (const child of children) {
   child.on('error', () => stop(1));
