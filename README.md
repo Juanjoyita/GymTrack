@@ -6,7 +6,7 @@ GymTrack es una aplicación para registrar y gestionar entrenamientos, ejercicio
 
 | Integrante | Nombre completo |
 |---|---|
-| Integrante 1 | [Vanessa Bastidas Madroñero |
+| Integrante 1 | Vanessa Bastidas Madroñero |
 | Integrante 2 | Juan Vizuette Fajardo |
 | Integrante 3 | Juan Calvache |
 | Integrante 4 | Omar Acosta |
