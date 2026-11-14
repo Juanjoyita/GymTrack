@@ -41,7 +41,7 @@ describe('T009: validación, errores HTTP y logs sin datos sensibles', () => {
   });
   it('usa el resultado transformado por el esquema compartido', async () => {
     await peticionHttps(app).post('/api/comun-prueba/ejercicio')
-      .send({ nombre: '  Press  ', ignorado: 'no persistir' }).expect(201, { nombre: 'Press' });
+      .send({ nombre: '  Press  ', grupoMuscular: 'pecho', ignorado: 'no persistir' }).expect(201, { nombre: 'Press', grupoMuscular: 'pecho' });
   });
   it.each([[401, 'NO_AUTENTICADO'], [404, 'NO_ENCONTRADO'], [410, 'ENLACE_INVALIDO'], [429, 'DEMASIADAS_PETICIONES']])('normaliza HTTP %s', async (status, codigo) => {
     const response = await peticionHttps(app).get(`/api/comun-prueba/error/${status}`).expect(status as number);
