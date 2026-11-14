@@ -85,7 +85,8 @@ describe('T014: aceptación REST del catálogo de ejercicios (rojo hasta T023)',
 
   it('lista el catálogo global y los ejercicios propios del usuario con la forma del contrato', async () => {
     const a = await login(usuarioA.email);
-    const { body } = await a.get('/api/ejercicios').expect(200);
+    // Límite amplio: además de estos fixtures existe el catálogo de 50 ejercicios de T018.
+    const { body } = await a.get('/api/ejercicios').query({ limite: 100 }).expect(200);
     expect(body).toEqual(expect.arrayContaining([
       { id: catalogo.elevacion.id, nombre: catalogo.elevacion.nombre, grupoMuscular: 'hombros', propio: false, ultimoUso: null },
       { id: propioA.id, nombre: propioA.nombre, grupoMuscular: 'pecho', propio: true, ultimoUso: null },
@@ -225,7 +226,7 @@ describe('T014: aceptación REST del catálogo de ejercicios (rojo hasta T023)',
       const del = await a.delete(`/api/ejercicios/${id}`).expect(404);
       expect(del.body.codigo).toBe('NO_ENCONTRADO');
     }
-    const filas = await source.query('SELECT id, nombre, grupo_muscular, usuario_id FROM ejercicio WHERE usuario_id IS NULL ORDER BY id');
+    const filas = await source.query('SELECT id, nombre, grupo_muscular, usuario_id FROM ejercicio WHERE id = ANY($1::uuid[]) ORDER BY id', [Object.values(catalogo).map((e) => e.id)]);
     expect(filas).toEqual(Object.values(catalogo).map((e) => ({ id: e.id, nombre: e.nombre, grupo_muscular: e.grupo, usuario_id: null })));
   });
 
