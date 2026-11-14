@@ -1,4 +1,4 @@
-﻿import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { ConflictException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -18,12 +18,16 @@ export class EjerciciosRealizadosService {
   ) {}
 
   async crear(usuarioId: string, entrenamientoId: string, input: { id: string; ejercicioId: string; posicion: number }) {
+    return (await this.crearConEstado(usuarioId, entrenamientoId, input)).ejercicio;
+  }
+
+  async crearConEstado(usuarioId: string, entrenamientoId: string, input: { id: string; ejercicioId: string; posicion: number }) {
     const sesion = await this.entrenamientos.findOne({ where: { id: entrenamientoId, usuario_id: usuarioId } });
     if (!sesion) throw missing();
     if (!Number.isInteger(input.posicion) || input.posicion < 1) throw invalid('posicion');
 
     const existente = await this.realizados.findOne({ where: { id: input.id } });
-    if (existente) return this.reintentoPropio(usuarioId, entrenamientoId, input.id, input.ejercicioId, input.posicion);
+    if (existente) return { ejercicio: await this.reintentoPropio(usuarioId, entrenamientoId, input.id, input.ejercicioId, input.posicion), creado: false };
 
     const ejercicio = await this.ejercicios.findOne({ where: { id: input.ejercicioId } });
     if (!ejercicio || (ejercicio.usuario_id !== null && ejercicio.usuario_id !== usuarioId)) throw missing();
@@ -32,8 +36,8 @@ export class EjerciciosRealizadosService {
        VALUES ($1,$2,$3,$4) ON CONFLICT (id) DO NOTHING RETURNING *`,
       [input.id, entrenamientoId, input.ejercicioId, input.posicion],
     );
-    if (insertado) return insertado as EjercicioRealizadoRow;
-    return this.reintentoPropio(usuarioId, entrenamientoId, input.id, input.ejercicioId, input.posicion);
+    if (insertado) return { ejercicio: insertado as EjercicioRealizadoRow, creado: true };
+    return { ejercicio: await this.reintentoPropio(usuarioId, entrenamientoId, input.id, input.ejercicioId, input.posicion), creado: false };
   }
 
   private async reintentoPropio(usuarioId: string, entrenamientoId: string, id: string, ejercicioId: string, posicion: number) {

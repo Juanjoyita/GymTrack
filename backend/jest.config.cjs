@@ -1,5 +1,6 @@
 module.exports = {
   preset: 'ts-jest',
+  setupFiles: ['<rootDir>/test/setup-env.ts'],
   testEnvironment: 'node',
   testMatch: ['<rootDir>/test/**/*.e2e-spec.ts', '<rootDir>/test/**/*.spec.ts', '<rootDir>/src/**/*.spec.ts'],
   testTimeout: 30000,

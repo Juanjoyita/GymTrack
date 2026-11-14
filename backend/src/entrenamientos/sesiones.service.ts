@@ -8,6 +8,8 @@ import { Serie } from '../database/entities/serie';
 const conflictoActivo = () => new ConflictException({ codigo: 'ENTRENAMIENTO_EN_CURSO', mensaje: 'Ya existe un entrenamiento en curso.', campos: null, actual: null });
 const noEncontrado = () => new NotFoundException({ codigo: 'NO_ENCONTRADO', mensaje: 'No se encontró el entrenamiento.', campos: null, actual: null });
 
+type EntradaSesion = { id?: string; inicio?: string | Date; zonaHoraria: string; fin?: string | Date; nota?: string | null };
+
 @Injectable()
 export class SesionesService {
   constructor(
@@ -15,7 +17,12 @@ export class SesionesService {
     private readonly source: DataSource,
   ) {}
 
-  async iniciar(usuarioId: string, entrada: { id?: string; inicio?: string | Date; zonaHoraria: string; fin?: string | Date; nota?: string | null }) {
+  async iniciar(usuarioId: string, entrada: EntradaSesion) {
+    return (await this.iniciarConEstado(usuarioId, entrada)).entrenamiento;
+  }
+
+  async iniciarConEstado(usuarioId: string, entrada: EntradaSesion) {
+    const id = entrada.id ?? randomUUID();
     const inicio = entrada.inicio ? new Date(entrada.inicio) : new Date();
     const fin = entrada.fin ? new Date(entrada.fin) : null;
     let zonaValida = true;
@@ -24,15 +31,34 @@ export class SesionesService {
       throw new BadRequestException({ codigo: 'VALIDACION', mensaje: 'Fechas de entrenamiento inválidas.', campos: { inicio: 'Revisa inicio y fin.' }, actual: null });
     }
     try {
-      const row = this.entrenamientos.create({ id: entrada.id ?? randomUUID(), usuario_id: usuarioId,
-        estado: fin ? 'finalizado' : 'en_curso', inicio, fin, zona_horaria: entrada.zonaHoraria,
-        ultima_actividad_en: inicio, nota: entrada.nota ?? null, rutina_origen_id: null });
-      return await this.entrenamientos.save(row);
+      // Solo INSERT: save() puede convertir una carrera de UUID en UPDATE de la fila ajena.
+      const [insertado] = await this.entrenamientos.query(
+        `INSERT INTO entrenamiento (id, usuario_id, estado, inicio, fin, zona_horaria, ultima_actividad_en, nota, rutina_origen_id)
+         VALUES ($1,$2,$3,$4,$5,$6,$4,$7,NULL)
+         ON CONFLICT (id) DO NOTHING RETURNING *`,
+        [id, usuarioId, fin ? 'finalizado' : 'en_curso', inicio, fin, entrada.zonaHoraria, entrada.nota ?? null],
+      );
+      if (insertado) return { entrenamiento: insertado as EntrenamientoRow, creado: true };
     } catch (error) {
       const pg = error as { driverError?: { code?: string; constraint?: string }; code?: string; constraint?: string };
-      if ((pg.driverError?.code === '23505' && pg.driverError.constraint === 'uq_entrenamiento_en_curso') || (pg.code === '23505' && pg.constraint === 'uq_entrenamiento_en_curso')) throw conflictoActivo();
+      if ((pg.driverError?.code === '23505' && pg.driverError.constraint === 'uq_entrenamiento_en_curso') || (pg.code === '23505' && pg.constraint === 'uq_entrenamiento_en_curso')) {
+        const existente = await this.reintento(usuarioId, id);
+        if (existente) return existente;
+        throw conflictoActivo();
+      }
       throw error;
     }
+    const existente = await this.reintento(usuarioId, id);
+    if (!existente) throw noEncontrado();
+    return existente;
+  }
+
+  private async reintento(usuarioId: string, id: string) {
+    // Nueva sentencia tras INSERT: ve al ganador confirmado, sin modificar sus datos.
+    const row = await this.entrenamientos.findOne({ where: { id } });
+    if (!row) return null;
+    if (row.usuario_id !== usuarioId) throw noEncontrado();
+    return { entrenamiento: row, creado: false };
   }
 
   async actualizarNota(usuarioId: string, id: string, nota: string | null, version: number) {
@@ -55,18 +81,19 @@ export class SesionesService {
     return { ...row, inactivo: Date.now() - row.ultima_actividad_en.getTime() > 12 * 60 * 60 * 1000 };
   }
 
-  async finalizar(usuarioId: string, id: string, fin?: string | Date) {
+  async finalizar(usuarioId: string, id: string, fin?: string | Date, version?: number) {
     return this.source.transaction(async (manager) => {
       const repo = manager.getRepository(Entrenamiento);
       const row = await repo.findOne({ where: { id, usuario_id: usuarioId }, lock: { mode: 'pessimistic_write' } });
       if (!row) throw noEncontrado();
+      if (version !== undefined && row.version !== version) throw new ConflictException({ codigo: 'CONFLICTO_VERSION', mensaje: 'La versión del recurso ha cambiado.', campos: null, actual: row });
       const tieneSeries = await manager.getRepository(Serie).createQueryBuilder('s')
         .innerJoin('ejercicio_realizado', 'er', 'er.id = s.ejercicio_realizado_id')
         .where('er.entrenamiento_id = :id', { id }).getExists();
       if (!tieneSeries) { await repo.remove(row); return { descartado: true as const }; }
       const horaFin = fin ? new Date(fin) : (Date.now() - row.ultima_actividad_en.getTime() > 12 * 60 * 60 * 1000
         ? row.ultima_actividad_en : new Date());
-      if (!Number.isFinite(horaFin.getTime()) || horaFin < row.inicio) throw new ConflictException('Fecha de fin inválida.');
+      if (!Number.isFinite(horaFin.getTime()) || horaFin < row.inicio) throw new BadRequestException({ codigo: 'VALIDACION', mensaje: 'Fecha de fin inválida.', campos: { fin: 'Debe ser posterior o igual al inicio.' }, actual: null });
       row.estado = 'finalizado'; row.fin = horaFin;
       return repo.save(row);
     });
