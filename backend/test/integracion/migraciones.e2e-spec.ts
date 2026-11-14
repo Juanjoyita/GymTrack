@@ -9,6 +9,8 @@ const realizado = '00000000-0000-4000-8000-000000000005';
 const serie = '00000000-0000-4000-8000-000000000006';
 const token = '00000000-0000-4000-8000-000000000007';
 const verifyRestart = process.env.VERIFY_PERSISTENCE === '1';
+// T018 añade la migración de datos con el catálogo global de 50 ejercicios (usuario_id NULL).
+const CATALOGO = 50;
 
 async function snapshot(source: DataSource) {
   const result: Record<string, unknown> = {};
@@ -51,7 +53,7 @@ describe('Migración inicial PostgreSQL (solo esquema T004 en gymtrack_test)', (
   if (verifyRestart) {
     it('conserva todas las filas, precisión, zona y migración tras reiniciar Compose', async () => {
       const data = await snapshot(source);
-      for (const rows of Object.values(data)) expect(rows).toHaveLength(1);
+      for (const [table, rows] of Object.entries(data)) expect(rows).toHaveLength(table === 'ejercicio' ? CATALOGO + 1 : 1);
       expect((data.serie as {peso_kg: string}[])[0].peso_kg).toBe('60.1234');
       const [row] = await source.query('SELECT inicio, zona_horaria FROM entrenamiento WHERE id=$1', [entrenamiento]);
       expect(row.inicio.toISOString()).toBe('2026-11-12T04:00:00.000Z');
@@ -62,14 +64,15 @@ describe('Migración inicial PostgreSQL (solo esquema T004 en gymtrack_test)', (
     return;
   }
 
-  it('parte de un esquema vacío y crea las ocho tablas con una sola migración', async () => {
+  it('parte de un esquema vacío y crea las ocho tablas con la migración de esquema y la del catálogo', async () => {
     expect(await source.query('SELECT tablename FROM pg_tables WHERE schemaname=$1', [TEST_SCHEMA])).toEqual([]);
-    expect(await source.runMigrations()).toHaveLength(1);
+    expect((await source.runMigrations()).map((m) => m.name)).toEqual(['EsquemaInicial1794441600000', 'CatalogoInicial1794528000000']);
     const tables = await source.query('SELECT tablename FROM pg_tables WHERE schemaname=$1 ORDER BY tablename', [TEST_SCHEMA]);
     expect(tables.map((r: {tablename: string}) => r.tablename)).toEqual([
       'ejercicio','ejercicio_realizado','entrenamiento','migrations','rutina','rutina_ejercicio','serie','token_recuperacion','usuario'
     ]);
-    expect(await source.query('SELECT * FROM ejercicio')).toHaveLength(0);
+    expect(await source.query('SELECT * FROM ejercicio WHERE usuario_id IS NULL')).toHaveLength(CATALOGO);
+    expect(await source.query('SELECT * FROM ejercicio WHERE usuario_id IS NOT NULL')).toHaveLength(0);
     expect(source.options.synchronize).toBe(false);
   });
   it('segunda ejecución no aplica cambios ni altera filas existentes', async () => {
@@ -77,6 +80,7 @@ describe('Migración inicial PostgreSQL (solo esquema T004 en gymtrack_test)', (
     const before = await snapshot(source);
     expect(await source.runMigrations()).toHaveLength(0);
     expect(await snapshot(source)).toEqual(before);
+    expect(await source.query('SELECT * FROM ejercicio WHERE usuario_id IS NULL')).toHaveLength(CATALOGO);
   });
   it('aplica las mismas entidades TypeORM sin exponer credenciales por defecto', async () => {
     const user = await source.getRepository('Usuario').findOneByOrFail({ id: usuario });
@@ -111,7 +115,8 @@ describe('Migración inicial PostgreSQL (solo esquema T004 en gymtrack_test)', (
         expect(await runner.query(`SELECT * FROM ${table}`)).toHaveLength(0);
       }
       expect(await runner.query('SELECT * FROM usuario')).toHaveLength(1);
-      expect(await runner.query('SELECT * FROM ejercicio')).toHaveLength(1);
+      expect(await runner.query('SELECT * FROM ejercicio')).toHaveLength(CATALOGO + 1);
+      expect(await runner.query('SELECT * FROM ejercicio WHERE usuario_id IS NOT NULL')).toHaveLength(0);
       await runner.query('SET CONSTRAINTS ALL IMMEDIATE');
     } finally { await runner.rollbackTransaction(); await runner.release(); }
   });
