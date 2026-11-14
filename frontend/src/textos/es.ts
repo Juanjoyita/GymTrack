@@ -60,7 +60,7 @@ export const textos = {
     },
   },
   acceso: {
-    frase: 'Anota cada serie en segundos.',
+    frase: 'Cada repetición cuenta.',
     comprobando: 'Comprobando tu sesión…',
     reintentar: 'Reintentar',
     email: 'Correo electrónico',

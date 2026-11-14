@@ -50,7 +50,7 @@ export function PantallaAcceso({ titulo, subtitulo, children, pie }: PantallaAcc
 
   return (
     <div className="min-h-dvh bg-slate-950 text-white lg:grid lg:grid-cols-2">
-      <header className="relative overflow-hidden px-6 pt-8 sm:px-10 lg:border-r lg:border-white/10 lg:bg-slate-900/40 lg:px-14 lg:py-14">
+      <header className="relative overflow-hidden px-6 pb-6 pt-8 sm:px-10 lg:border-r lg:border-white/10 lg:bg-slate-900/40 lg:px-14 lg:py-14">
         <Disco className="pointer-events-none absolute -right-24 top-20 size-56 motion-safe:animate-rodar sm:-right-10 lg:-right-36 lg:top-14 lg:size-[26rem]" />
         <div className="relative mx-auto flex w-full max-w-sm flex-col lg:mx-0 lg:h-full lg:max-w-lg lg:justify-between">
           <div className="flex items-center gap-3">
@@ -63,14 +63,14 @@ export function PantallaAcceso({ titulo, subtitulo, children, pie }: PantallaAcc
             </div>
           </div>
           <div className="mt-24 lg:mt-0">
-            <p className="max-w-[14rem] font-display text-5xl font-extrabold italic leading-[0.9] sm:max-w-sm sm:text-6xl lg:max-w-md lg:text-8xl">
+            <p className="max-w-[14rem] pb-2 font-display text-5xl font-extrabold italic leading-[0.95] sm:max-w-sm sm:text-6xl lg:max-w-md lg:text-8xl">
               {textos.acceso.frase}
             </p>
           </div>
         </div>
       </header>
 
-      <main id="contenido" className="px-6 pb-12 pt-10 sm:px-10 lg:flex lg:items-center lg:px-14">
+      <main id="contenido" className="px-6 pb-12 pt-6 sm:px-10 lg:flex lg:items-center lg:px-14">
         <div className="mx-auto w-full max-w-sm">
           <h1 ref={encabezado} tabIndex={-1} className="font-display text-4xl font-bold text-white focus:outline-none">
             {titulo}
