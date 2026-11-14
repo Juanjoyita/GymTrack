@@ -52,3 +52,16 @@ export const IconoReloj = (p: PropsIcono) => (
 export const IconoBrujula = (p: PropsIcono) => (
   <Icono {...p}><circle cx="12" cy="12" r="9" /><path d="m15.5 8.5-2 5-5 2 2-5z" /></Icono>
 );
+
+export const IconoAlerta = (p: PropsIcono) => (
+  <Icono {...p}><circle cx="12" cy="12" r="9" /><path d="M12 7.5v5M12 16.5h.01" /></Icono>
+);
+
+export const IconoSalir = (p: PropsIcono) => (
+  <Icono {...p}><path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3" /><path d="m10 17 5-5-5-5M15 12H4" /></Icono>
+);
+
+/** Indicador de actividad; gira solo si el usuario no pidió reducir el movimiento. */
+export const IconoCargando = (p: PropsIcono) => (
+  <Icono {...p}><path d="M21 12a9 9 0 1 1-6.2-8.6" /></Icono>
+);

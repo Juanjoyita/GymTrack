@@ -1,18 +1,37 @@
 import type { RouteObject } from 'react-router-dom';
+import { PaginaLogin } from '../paginas/auth/PaginaLogin';
+import { PaginaRegistro } from '../paginas/auth/PaginaRegistro';
+import { CerrarSesion } from '../paginas/auth/CerrarSesion';
 import { Layout } from './Layout';
 import { NoEncontrada } from './NoEncontrada';
 import { PaginaSeccion } from './PaginaSeccion';
+import { RutaPrivada, RutaPublica } from './RutaProtegida';
 import { SECCIONES } from './secciones';
 
 // Cada historia sustituirá su marcador por la página real (frontend/src/paginas/*).
 export const rutas: RouteObject[] = [
   {
-    element: <Layout />,
+    element: <RutaPublica />,
     children: [
-      ...SECCIONES.map((seccion) => (seccion.ruta === '/'
-        ? { index: true, element: <PaginaSeccion seccion={seccion} /> }
-        : { path: seccion.ruta.slice(1), element: <PaginaSeccion seccion={seccion} /> })),
-      { path: '*', element: <NoEncontrada /> },
+      { path: 'login', element: <PaginaLogin /> },
+      { path: 'registro', element: <PaginaRegistro /> },
     ],
+  },
+  {
+    element: <RutaPrivada />,
+    children: [{
+      element: <Layout />,
+      children: [
+        ...SECCIONES.map((seccion) => {
+          const element = (
+            <PaginaSeccion seccion={seccion}>
+              {seccion.clave === 'cuenta' && <CerrarSesion />}
+            </PaginaSeccion>
+          );
+          return seccion.ruta === '/' ? { index: true, element } : { path: seccion.ruta.slice(1), element };
+        }),
+        { path: '*', element: <NoEncontrada /> },
+      ],
+    }],
   },
 ];

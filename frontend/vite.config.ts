@@ -8,10 +8,13 @@ import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
+// El dominio se compila en CommonJS para el backend; el frontend usa su fuente ESM para que el
+// build reconozca sus exportaciones y descarte el código que no se usa.
+const resolveDominio = { alias: { '@gymtrack/domain': fileURLToPath(new URL('../packages/domain/src/index.ts', import.meta.url)) } };
 
 export default defineConfig(({ command, mode }) => {
   const env = { ...loadEnv(mode, root, ''), ...process.env };
-  if (command === 'build') return { plugins: [react(), tailwindcss()] };
+  if (command === 'build') return { plugins: [react(), tailwindcss()], resolve: resolveDominio };
   const directory = env.GYMTRACK_TLS_DIR || resolve(homedir(), '.local/share/gymtrack/tls');
   const https = {
     cert: readFileSync(resolve(root, env.TLS_CERT_PATH || resolve(directory, 'localhost.pem'))),
@@ -20,6 +23,7 @@ export default defineConfig(({ command, mode }) => {
   };
   return {
     plugins: [react(), tailwindcss()],
+    resolve: resolveDominio,
     server: {
       host: 'localhost', port: 5173, strictPort: true, https,
       proxy: {

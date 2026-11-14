@@ -1,18 +1,27 @@
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { RouterProvider, createMemoryRouter } from 'react-router-dom';
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Proveedores } from '../src/app/Proveedores';
 import { rutas } from '../src/app/rutas';
 import { textos } from '../src/textos/es';
 
-function renderizarEn(ruta: string) {
+// Desde T024 las secciones son privadas: se simula una sesión iniciada (GET /auth/yo → 200).
+const USUARIO = { id: '00000000-0000-4000-8000-000000000101', email: 't010@example.invalid', unidadPeso: 'kg', zonaHoraria: 'America/Bogota' };
+
+beforeEach(() => {
+  vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify(USUARIO), { status: 200, headers: { 'Content-Type': 'application/json' } })));
+});
+afterEach(() => { vi.unstubAllGlobals(); });
+
+async function renderizarEn(ruta: string) {
   const router = createMemoryRouter(rutas, { initialEntries: [ruta] });
   render(
     <Proveedores>
       <RouterProvider router={router} />
     </Proveedores>,
   );
+  await screen.findByRole('main');
   return router;
 }
 
@@ -34,7 +43,7 @@ const RUTA_POR_SECCION = {
 
 describe('shell móvil', () => {
   it('ofrece un enlace para saltar al contenido como primer elemento enfocable', async () => {
-    renderizarEn('/');
+    await renderizarEn('/');
 
     await userEvent.tab();
 
@@ -44,8 +53,8 @@ describe('shell móvil', () => {
     expect(screen.getByRole('main')).toHaveAttribute('id', 'contenido');
   });
 
-  it('tiene cabecera con el nombre de la aplicación y navegación principal etiquetada', () => {
-    renderizarEn('/');
+  it('tiene cabecera con el nombre de la aplicación y navegación principal etiquetada', async () => {
+    await renderizarEn('/');
 
     expect(within(screen.getByRole('banner')).getByText(textos.app.nombre)).toBeInTheDocument();
     const navegacion = screen.getByRole('navigation', { name: textos.navegacion.etiqueta });
@@ -56,8 +65,8 @@ describe('shell móvil', () => {
     }
   });
 
-  it.each(SECCIONES)('muestra la sección $nombre en $ruta y la marca como actual', ({ ruta, nombre }) => {
-    renderizarEn(ruta);
+  it.each(SECCIONES)('muestra la sección $nombre en $ruta y la marca como actual', async ({ ruta, nombre }) => {
+    await renderizarEn(ruta);
 
     expect(screen.getByRole('heading', { level: 1, name: nombre })).toBeInTheDocument();
     const navegacion = screen.getByRole('navigation', { name: textos.navegacion.etiqueta });
@@ -65,25 +74,25 @@ describe('shell móvil', () => {
     expect(document.title).toBe(`${nombre} · ${textos.app.nombre}`);
   });
 
-  it('indica con texto que la sección aún no está disponible, sin implementar sus flujos', () => {
-    renderizarEn('/historial');
+  it('indica con texto que la sección aún no está disponible, sin implementar sus flujos', async () => {
+    await renderizarEn('/historial');
 
     expect(screen.getByText(textos.shell.proximamente)).toBeInTheDocument();
     expect(screen.queryByRole('form')).not.toBeInTheDocument();
     expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
   });
 
-  it.each(Object.entries(RUTA_POR_SECCION))('describe el propósito de %s y lo que incluirá', (clave, ruta) => {
+  it.each(Object.entries(RUTA_POR_SECCION))('describe el propósito de %s y lo que incluirá', async (clave, ruta) => {
     const seccion = textos.secciones[clave as keyof typeof textos.secciones];
-    renderizarEn(ruta);
+    await renderizarEn(ruta);
 
     expect(screen.getByText(seccion.descripcion)).toBeInTheDocument();
     const lista = screen.getByRole('list', { name: textos.shell.queIncluira });
     expect(within(lista).getAllByRole('listitem').map((item) => item.textContent)).toEqual([...seccion.incluira]);
   });
 
-  it('los iconos son decorativos y no se anuncian', () => {
-    renderizarEn('/');
+  it('los iconos son decorativos y no se anuncian', async () => {
+    await renderizarEn('/');
 
     const iconos = document.querySelectorAll('svg');
     expect(iconos.length).toBeGreaterThan(0);
@@ -94,7 +103,7 @@ describe('shell móvil', () => {
   });
 
   it('al navegar con el teclado mueve el foco al título de la nueva sección', async () => {
-    const router = renderizarEn('/');
+    const router = await renderizarEn('/');
     const navegacion = screen.getByRole('navigation', { name: textos.navegacion.etiqueta });
 
     within(navegacion).getByRole('link', { name: textos.navegacion.progreso }).focus();
@@ -104,14 +113,14 @@ describe('shell móvil', () => {
     expect(screen.getByRole('heading', { level: 1, name: textos.navegacion.progreso })).toHaveFocus();
   });
 
-  it('no roba el foco en la primera carga', () => {
-    renderizarEn('/');
+  it('no roba el foco en la primera carga', async () => {
+    await renderizarEn('/');
 
     expect(document.body).toHaveFocus();
   });
 
   it('muestra una página de no encontrada con enlace de vuelta al inicio', async () => {
-    const router = renderizarEn('/no-existe');
+    const router = await renderizarEn('/no-existe');
 
     expect(screen.getByRole('heading', { level: 1, name: textos.noEncontrada.titulo })).toBeInTheDocument();
     await userEvent.click(screen.getByRole('link', { name: textos.noEncontrada.volver }));
