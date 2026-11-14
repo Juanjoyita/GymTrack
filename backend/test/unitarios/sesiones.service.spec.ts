@@ -1,17 +1,17 @@
 import { SesionesService } from '../../src/entrenamientos/sesiones.service';
 import { Entrenamiento } from '../../src/database/entities/entrenamiento';
-import { Serie } from '../../src/database/entities/serie';
 
 describe('SesionesService', () => {
+  type MockRepo = { create: jest.Mock; save: jest.Mock; findOne: jest.Mock; remove: jest.Mock; update: jest.Mock; createQueryBuilder: jest.Mock };
   const setup = (hasSeries = true) => {
-    const repo: any = { create: jest.fn((x) => x), save: jest.fn(async (x) => x), findOne: jest.fn(), remove: jest.fn(), update: jest.fn(), createQueryBuilder: jest.fn() };
-    const builder: any = { update: jest.fn().mockReturnThis(), set: jest.fn().mockReturnThis(), where: jest.fn().mockReturnThis(), returning: jest.fn().mockReturnThis(), execute: jest.fn().mockResolvedValue({ affected: 1, raw: [{ id: 'i', nota: 'nota', version: 2 }] }) };
+    const repo: MockRepo = { create: jest.fn((x) => x), save: jest.fn(async (x) => x), findOne: jest.fn(), remove: jest.fn(), update: jest.fn(), createQueryBuilder: jest.fn() };
+    const builder = { update: jest.fn().mockReturnThis(), delete: jest.fn().mockReturnThis(), from: jest.fn().mockReturnThis(), set: jest.fn().mockReturnThis(), where: jest.fn().mockReturnThis(), returning: jest.fn().mockReturnThis(), execute: jest.fn().mockResolvedValue({ affected: 1, raw: [{ id: 'i', nota: 'nota', version: 2 }] }) };
     repo.createQueryBuilder.mockReturnValue(builder);
-    const txRepo: any = { findOne: jest.fn(), remove: jest.fn(), save: jest.fn(async (x) => x) };
-    const seriesRepo: any = { createQueryBuilder: () => ({ innerJoin: () => ({ where: () => ({ getExists: async () => hasSeries }) }) }) };
-    const manager: any = { getRepository: (entity: any) => entity === Entrenamiento ? txRepo : seriesRepo };
-    const source: any = { transaction: (fn: any) => fn(manager) };
-    return { service: new SesionesService(repo, source), repo, txRepo };
+    const txRepo = { findOne: jest.fn(), remove: jest.fn(), save: jest.fn(async (x: unknown) => x) };
+    const seriesRepo = { createQueryBuilder: () => ({ innerJoin: () => ({ where: () => ({ getExists: async () => hasSeries }) }) }) };
+    const manager = { getRepository: (entity: unknown) => entity === Entrenamiento ? txRepo : seriesRepo };
+    const source = { transaction: (fn: (manager: unknown) => unknown) => fn(manager) };
+    return { service: new SesionesService(repo as never, source as never), repo, txRepo };
   };
   it('inicia y conserva fecha UTC, zona IANA y nota', async () => {
     const { service } = setup();
@@ -51,7 +51,9 @@ describe('SesionesService', () => {
     const { service, repo } = setup(); const row = { id: 'i', nota: null }; repo.findOne.mockResolvedValue(row);
     await service.actualizarNota('u', 'i', 'nota', 1);
     expect(repo.createQueryBuilder().where).toHaveBeenCalledWith('id = :id AND usuario_id = :usuarioId AND version = :version', { id: 'i', usuarioId: 'u', version: 1 });
-    await service.descartar('u', 'i'); expect(repo.remove).toHaveBeenCalledWith(row);
+    await service.descartar('u', 'i', 1);
+    expect(repo.createQueryBuilder().where).toHaveBeenLastCalledWith('id = :id AND usuario_id = :usuarioId AND version = :version', { id: 'i', usuarioId: 'u', version: 1 });
+    expect(repo.remove).not.toHaveBeenCalled();
   });
   it('convierte actualización condicional sin filas a conflicto de versión si existe recurso', async () => {
     const { service, repo } = setup();
@@ -66,7 +68,7 @@ describe('SesionesService', () => {
   });
   it('rechaza una segunda sesión activa concurrente cuando la restricción única gana carrera', async () => {
     const { service, repo } = setup(); let calls = 0;
-    repo.save.mockImplementation(async (row: any) => { if (++calls === 2) throw { driverError: { code: '23505' } }; return row; });
+    repo.save.mockImplementation(async (row: unknown) => { if (++calls === 2) throw { driverError: { code: '23505' } }; return row; });
     const results = await Promise.allSettled([1, 2].map((n) => service.iniciar('u', { id: String(n), zonaHoraria: 'UTC' })));
     expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
     expect(results.filter((r) => r.status === 'rejected')).toHaveLength(1);
@@ -80,6 +82,14 @@ describe('SesionesService', () => {
     const { service, repo, txRepo } = setup();
     txRepo.findOne.mockResolvedValue(null); repo.findOne.mockResolvedValue(null);
     await expect(service.finalizar('otro', 'i')).rejects.toMatchObject({ status: 404, response: { codigo: 'NO_ENCONTRADO' } });
-    await expect(service.descartar('otro', 'i')).rejects.toMatchObject({ status: 404, response: { codigo: 'NO_ENCONTRADO' } });
+    repo.createQueryBuilder().execute.mockResolvedValue({ affected: 0, raw: [] });
+    await expect(service.descartar('otro', 'i', 1)).rejects.toMatchObject({ status: 404, response: { codigo: 'NO_ENCONTRADO' } });
+  });
+  it('DELETE with stale version returns current resource conflict', async () => {
+    const { service, repo } = setup();
+    repo.createQueryBuilder().execute.mockResolvedValue({ affected: 0, raw: [] });
+    repo.findOne.mockResolvedValue({ id: 'i', version: 2 });
+    await expect(service.descartar('u', 'i', 1)).rejects.toMatchObject({ status: 409, response: { codigo: 'CONFLICTO_VERSION' } });
+    expect(repo.remove).not.toHaveBeenCalled();
   });
 });
