@@ -10,7 +10,7 @@ import { AuthController } from './auth.controller';
 import { SoloJsonGuard } from './solo-json.guard';
 import { opcionesJwt } from './auth.config';
 
-// Preparado para importar en AppModule en T023; no expone rutas de producto todavía.
+// Acceso P1, con guard global al importar este módulo desde AppModule.
 @Module({
   imports: [
     TypeOrmModule.forFeature([Usuario]),

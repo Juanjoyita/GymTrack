@@ -4,11 +4,13 @@ import { DataSource } from 'typeorm';
 import { peticionHttps } from '../utils/https';
 import { opcionesTls } from '../../src/comun/tls';
 import { AppModule } from '../../src/app.module';
+import { Publico } from '../../src/auth/publico.decorator';
 import { configureApi } from '../../src/main';
 
 // Ruta solo del módulo de prueba; no añade endpoints al producto.
 @Controller('conexion-prueba')
 class ConexionPrueba {
+  @Publico()
   @Get()
   get() { return { disponible: true }; }
 }

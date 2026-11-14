@@ -58,10 +58,11 @@ export class SeriesService {
     if (!Number.isInteger(patch.version) || patch.version < 1) throw invalid({ version: 'Valor inválido.' });
     const row = await this.owned(usuarioId, entrenamientoId, erId, id);
     const repeticiones = patch.repeticiones ?? row.repeticiones;
-    const entrada = patch.pesoEntrada ?? { valor: Number(row.peso_kg), unidad: 'kg' as const };
-    const parsed = esquemaSerie.safeParse({ repeticiones, pesoEntrada: entrada });
+    // Los kg persistidos tienen cuatro decimales; solo una entrada nueva exige dos decimales originales.
+    const entrada = patch.pesoEntrada;
+    const parsed = esquemaSerie.safeParse({ repeticiones, pesoEntrada: entrada ?? { valor: 0, unidad: 'kg' } });
     if (!parsed.success || (patch.orden !== undefined && (!Number.isInteger(patch.orden) || patch.orden < 1))) throw invalid({ serie: 'Valor inválido.' });
-    const pesoKg = entrada.unidad === 'kg' ? entrada.valor : lbAKg(entrada.valor);
+    const pesoKg = entrada ? (entrada.unidad === 'kg' ? entrada.valor : lbAKg(entrada.valor)) : Number(row.peso_kg);
     const [filasActualizadas] = await this.source.query(
       `UPDATE serie s SET orden=CASE WHEN $5::boolean THEN $6::integer ELSE s.orden END,
        repeticiones=$7, peso_kg=$8, version=s.version+1

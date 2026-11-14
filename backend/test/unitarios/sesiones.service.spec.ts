@@ -2,9 +2,9 @@ import { SesionesService } from '../../src/entrenamientos/sesiones.service';
 import { Entrenamiento } from '../../src/database/entities/entrenamiento';
 
 describe('SesionesService', () => {
-  type MockRepo = { create: jest.Mock; save: jest.Mock; findOne: jest.Mock; remove: jest.Mock; update: jest.Mock; createQueryBuilder: jest.Mock };
+  type MockRepo = { query: jest.Mock; create: jest.Mock; save: jest.Mock; findOne: jest.Mock; remove: jest.Mock; update: jest.Mock; createQueryBuilder: jest.Mock };
   const setup = (hasSeries = true) => {
-    const repo: MockRepo = { create: jest.fn((x) => x), save: jest.fn(async (x) => x), findOne: jest.fn(), remove: jest.fn(), update: jest.fn(), createQueryBuilder: jest.fn() };
+    const repo: MockRepo = { query: jest.fn(async (_sql: string, values: unknown[]) => [{ id: values[0], usuario_id: values[1], estado: values[2], inicio: values[3], fin: values[4], zona_horaria: values[5], ultima_actividad_en: values[3], nota: values[6], rutina_origen_id: null }]), create: jest.fn((x) => x), save: jest.fn(async (x) => x), findOne: jest.fn(), remove: jest.fn(), update: jest.fn(), createQueryBuilder: jest.fn() };
     const builder = { update: jest.fn().mockReturnThis(), delete: jest.fn().mockReturnThis(), from: jest.fn().mockReturnThis(), set: jest.fn().mockReturnThis(), where: jest.fn().mockReturnThis(), returning: jest.fn().mockReturnThis(), execute: jest.fn().mockResolvedValue({ affected: 1, raw: [{ id: 'i', nota: 'nota', version: 2 }] }) };
     repo.createQueryBuilder.mockReturnValue(builder);
     const txRepo = { findOne: jest.fn(), remove: jest.fn(), save: jest.fn(async (x: unknown) => x) };
@@ -68,14 +68,14 @@ describe('SesionesService', () => {
   });
   it('rechaza una segunda sesión activa concurrente cuando la restricción única gana carrera', async () => {
     const { service, repo } = setup(); let calls = 0;
-    repo.save.mockImplementation(async (row: unknown) => { if (++calls === 2) throw { driverError: { code: '23505' } }; return row; });
+    repo.query.mockImplementation(async () => { if (++calls === 2) throw { driverError: { code: '23505', constraint: 'uq_entrenamiento_en_curso' } }; return [{ id: 'i' }]; });
     const results = await Promise.allSettled([1, 2].map((n) => service.iniciar('u', { id: String(n), zonaHoraria: 'UTC' })));
     expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
     expect(results.filter((r) => r.status === 'rejected')).toHaveLength(1);
   });
   it('no traduce otra violación 23505 como sesión activa', async () => {
     const { service, repo } = setup();
-    repo.save.mockRejectedValue({ driverError: { code: '23505', constraint: 'entrenamiento_pkey' } });
+    repo.query.mockRejectedValue({ driverError: { code: '23505', constraint: 'entrenamiento_pkey' } });
     await expect(service.iniciar('u', { id: 'i', zonaHoraria: 'UTC' })).rejects.toMatchObject({ driverError: { constraint: 'entrenamiento_pkey' } });
   });
   it('finalizar y descartar sesión ajena responden NO_ENCONTRADO', async () => {

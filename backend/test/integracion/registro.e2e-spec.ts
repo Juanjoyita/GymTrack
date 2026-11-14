@@ -3,6 +3,7 @@ import { Test } from '@nestjs/testing';
 import { getDataSourceToken } from '@nestjs/typeorm';
 import { hash, argon2id } from 'argon2';
 import type { DataSource } from 'typeorm';
+import { Entrenamiento } from '../../src/database/entities/entrenamiento';
 import { AppModule } from '../../src/app.module';
 import { configureApi } from '../../src/main';
 import { opcionesTls } from '../../src/comun/tls';
@@ -46,7 +47,7 @@ describe('T013: aceptación REST de registro de entrenamientos', () => {
     return agent;
   }
   async function crearEjercicio() {
-    const [row] = await source.query(`INSERT INTO ejercicio (id,nombre,grupo_muscular,es_catalogo) VALUES ($1,'Press T013','pecho',true) RETURNING id`, [ejercicioId]);
+    const [row] = await source.query(`INSERT INTO ejercicio (id,nombre,nombre_normalizado,grupo_muscular,usuario_id) VALUES ($1,'Press T013','press t013','pecho',NULL) RETURNING id`, [ejercicioId]);
     return row.id as string;
   }
   function iniciar(agent: ReturnType<typeof cliente>, id: string, inicio = '2026-11-10T18:00:00.000Z') {
@@ -59,7 +60,14 @@ describe('T013: aceptación REST de registro de entrenamientos', () => {
     const created = await iniciar(agent, id).expect(201);
     expect(created.body).toMatchObject({ id, estado: 'en_curso', inicio: '2026-11-10T18:00:00.000Z', fin: null, zonaHoraria: 'America/Bogota' });
     await agent.patch(`/api/entrenamientos/${id}`).send({ nota: 'Buen entrenamiento', version: created.body.version }).expect(200);
-    await agent.get('/api/entrenamientos/en-curso').expect(200);
+    const ex = await crearEjercicio();
+    const erId = '30000000-0000-4000-8000-000000000099';
+    await agent.post(`/api/entrenamientos/${id}/ejercicios`).send({ id: erId, ejercicioId: ex, posicion: 1 }).expect(201);
+    await agent.post(`/api/entrenamientos/${id}/ejercicios/${erId}/series`).send({ id: '40000000-0000-4000-8000-000000000099', orden: 1, repeticiones: 8, pesoEntrada: { valor: 60, unidad: 'kg' }, registradaEn: '2026-11-10T18:10:00Z' }).expect(201);
+    const current = await agent.get('/api/entrenamientos/en-curso').expect(200);
+    expect(current.body.resumen).toMatchObject({ ejercicios: 1, series: 1, volumenKg: 480 });
+    const badFin = await agent.post(`/api/entrenamientos/${id}/finalizar`).send({ fin: '2026-11-10T17:00:00Z', version: created.body.version + 1 }).expect(400);
+    expect(badFin.body).toMatchObject({ codigo: 'VALIDACION', campos: { fin: expect.any(String) } });
     const done = await agent.post(`/api/entrenamientos/${id}/finalizar`).send({ fin: '2026-11-10T19:00:00.000Z', version: created.body.version + 1 }).expect(200);
     expect(done.body).toMatchObject({ id, estado: 'finalizado', nota: 'Buen entrenamiento' });
   });
@@ -139,4 +147,119 @@ describe('T013: aceptación REST de registro de entrenamientos', () => {
   it('rechaza operaciones de registro sin sesión', async () => {
     await cliente().post('/api/entrenamientos').send({ id: '20000000-0000-4000-8000-000000000008', inicio: '2026-11-10T18:00:00Z', zonaHoraria: 'UTC' }).expect(401);
   });
+  it('no hay sesión activa devuelve 204 y finalizar vacío lo descarta', async () => {
+    const agent = await login('t013.a@example.invalid');
+    await agent.get('/api/entrenamientos/en-curso').expect(204);
+    const id = '20000000-0000-4000-8000-000000000101';
+    const created = await iniciar(agent, id).expect(201);
+    await agent.post(`/api/entrenamientos/${id}/finalizar`).send({ version: created.body.version }).expect(200, { descartado: true });
+    await agent.get('/api/entrenamientos/en-curso').expect(204);
+    expect(await source.getRepository('Entrenamiento').count()).toBe(0);
+  });
+
+  it('los POST de sesión y ejercicio realizado repetidos responden 200 sin duplicar', async () => {
+    const agent = await login('t013.a@example.invalid'), ex = await crearEjercicio();
+    const id = '20000000-0000-4000-8000-000000000102', erId = '30000000-0000-4000-8000-000000000102';
+    await iniciar(agent, id).expect(201);
+    await iniciar(agent, id).expect(200);
+    const path = `/api/entrenamientos/${id}/ejercicios`, input = { id: erId, ejercicioId: ex, posicion: 1 };
+    await agent.post(path).send(input).expect(201);
+    await agent.post(path).send(input).expect(200);
+    expect(await source.getRepository('Entrenamiento').count()).toBe(1);
+    expect(await source.getRepository('EjercicioRealizado').count()).toBe(1);
+  });
+
+  it('prellenado devuelve null o series propias finalizadas, incluso tras reingresar', async () => {
+    const agent = await login('t013.a@example.invalid'), ex = await crearEjercicio();
+    const initial = await agent.get(`/api/ejercicios/${ex}/ultima-sesion`).expect(200);
+    expect(initial.text).toBe('null');
+    const id = '20000000-0000-4000-8000-000000000103', erId = '30000000-0000-4000-8000-000000000103';
+    const created = await iniciar(agent, id).expect(201);
+    await agent.post(`/api/entrenamientos/${id}/ejercicios`).send({ id: erId, ejercicioId: ex, posicion: 1 }).expect(201);
+    await agent.post(`/api/entrenamientos/${id}/ejercicios/${erId}/series`).send({ id: '40000000-0000-4000-8000-000000000103', orden: 1, repeticiones: 8, pesoEntrada: { valor: 60, unidad: 'kg' }, registradaEn: '2026-11-10T18:10:00Z' }).expect(201);
+    await agent.post(`/api/entrenamientos/${id}/finalizar`).send({ fin: '2026-11-10T19:00:00Z', version: created.body.version }).expect(200);
+    await agent.post('/api/auth/logout').expect(204);
+    const reingreso = await login('t013.a@example.invalid');
+    await reingreso.get(`/api/ejercicios/${ex}/ultima-sesion`).expect(200, { entrenamientoId: id, fecha: '2026-11-10T18:00:00.000Z', series: [{ orden: 1, repeticiones: 8, pesoKg: 60 }] });
+    const b = await login('t013.b@example.invalid');
+    const other = await b.get(`/api/ejercicios/${ex}/ultima-sesion`).expect(200);
+    expect(other.text).toBe('null');
+  });
+
+  it('conserva kg canónicos al editar solo repeticiones y expone conflictos sin nombres SQL', async () => {
+    const agent = await login('t013.a@example.invalid'), ex = await crearEjercicio();
+    const id = '20000000-0000-4000-8000-000000000104', erId = '30000000-0000-4000-8000-000000000104', sId = '40000000-0000-4000-8000-000000000104';
+    await iniciar(agent, id).expect(201);
+    const path = `/api/entrenamientos/${id}/ejercicios/${erId}`;
+    await agent.post(`/api/entrenamientos/${id}/ejercicios`).send({ id: erId, ejercicioId: ex, posicion: 1 }).expect(201);
+    const created = await agent.post(`${path}/series`).send({ id: sId, orden: 1, repeticiones: 8, pesoEntrada: { valor: 132.5, unidad: 'lb' }, registradaEn: '2026-11-10T18:10:00Z' }).expect(201);
+    const updated = await agent.patch(`${path}/series/${sId}`).send({ repeticiones: 9, version: 1 }).expect(200);
+    expect(updated.body).toMatchObject({ pesoKg: created.body.pesoKg, repeticiones: 9, version: 2 });
+    const conflict = await agent.patch(`${path}/series/${sId}`).send({ repeticiones: 10, version: 1 }).expect(409);
+    expect(conflict.body).toMatchObject({ codigo: 'CONFLICTO_VERSION', actual: { id: sId, pesoKg: created.body.pesoKg, version: 2 } });
+    expect(conflict.body.actual).not.toHaveProperty('peso_kg');
+    await agent.delete(`${path}/series/${sId}?version=1`).expect(409);
+    await agent.delete(`${path}/series/${sId}?version=2`).expect(204);
+    await agent.patch(path).send({ nota: 'nota', version: 1 }).expect(200);
+    const erConflict = await agent.delete(`${path}?version=1`).expect(409);
+    expect(erConflict.body.actual).toMatchObject({ ejercicioId: ex, nota: 'nota', version: 2 });
+    await agent.delete(`${path}?version=2`).expect(204);
+    const note = await agent.patch(`/api/entrenamientos/${id}`).send({ nota: 'conservada', version: 1 }).expect(200);
+    const finish = await agent.post(`/api/entrenamientos/${id}/finalizar`).send({ version: 1 }).expect(409);
+    expect(finish.body.actual).toMatchObject({ zonaHoraria: 'America/Bogota', nota: 'conservada', version: note.body.version });
+    await agent.delete(`/api/entrenamientos/${id}?version=1`).expect(409);
+    await agent.delete(`/api/entrenamientos/${id}?version=${note.body.version}`).expect(204);
+  });
+
+  it.each([false, true])('creación concurrente preserva propietario y datos (otra cuenta: %s)', async (otraCuenta) => {
+    const a = await login('t013.a@example.invalid');
+    const b = otraCuenta ? await login('t013.b@example.invalid') : a;
+    const id = '20000000-0000-4000-8000-000000000123';
+    const entradas = [
+      { id, inicio: '2026-11-10T18:00:00Z', zonaHoraria: 'America/Bogota', nota: 'datos de A' },
+      { id, inicio: '2026-11-09T16:00:00Z', zonaHoraria: 'UTC', nota: 'datos de B' },
+    ];
+    const repo = source.getRepository(Entrenamiento);
+    // Fuerza la ventana peligrosa del código anterior sin simular SQL: el primer save
+    // se retrasa hasta que el segundo ha insertado. La implementación atómica no usa save.
+    const guardar = repo.save.bind(repo);
+    let primera = true;
+    let liberar!: () => void;
+    const puerta = new Promise<void>((resolve) => { liberar = resolve; });
+    let original: unknown;
+    const save = jest.spyOn(repo, 'save').mockImplementation(async (entrada) => {
+      if (primera) { primera = false; await puerta; return guardar(entrada); }
+      try {
+        const result = await guardar(entrada);
+        [original] = await source.query('SELECT * FROM entrenamiento WHERE id=$1', [id]);
+        return result;
+      } finally { liberar(); }
+    });
+    let responses;
+    try {
+      responses = await Promise.all([a.post('/api/entrenamientos').send(entradas[0]), b.post('/api/entrenamientos').send(entradas[1])]);
+    } finally { save.mockRestore(); }
+    const [row] = await source.query('SELECT * FROM entrenamiento WHERE id=$1', [id]);
+    if (original) expect(row).toEqual(original);
+    expect(responses.map(({ status }) => status).sort()).toEqual(otraCuenta ? [201, 404] : [200, 201]);
+    const ganador = responses.findIndex(({ status }) => status === 201);
+    expect(row).toMatchObject({ usuario_id: otraCuenta && ganador === 1 ? usuarioB : usuarioA,
+      inicio: new Date(entradas[ganador].inicio), ultima_actividad_en: new Date(entradas[ganador].inicio),
+      zona_horaria: entradas[ganador].zonaHoraria, nota: entradas[ganador].nota,
+      estado: 'en_curso', fin: null, rutina_origen_id: null, version: 1 });
+    const snapshot = structuredClone(row);
+    const propietario = ganador === 0 ? a : b;
+    await propietario.post('/api/entrenamientos').send({ ...entradas[1 - ganador], nota: 'un reintento no debe modificar' }).expect(200);
+    if (otraCuenta) {
+      const ajeno = ganador === 0 ? b : a;
+      await ajeno.post('/api/entrenamientos').send({ ...entradas[0], id: '20000000-0000-4000-8000-000000000124' }).expect(201);
+      // El UUID ajeno sigue siendo 404 aunque esta cuenta ya tenga una sesión activa.
+      await ajeno.post('/api/entrenamientos').send(entradas[ganador]).expect(404);
+    }
+    const [preservado] = await source.query('SELECT * FROM entrenamiento WHERE id=$1', [id]);
+    expect(preservado).toEqual(snapshot);
+    const [{ total }] = await source.query('SELECT count(*)::int AS total FROM entrenamiento WHERE id=$1', [id]);
+    expect(total).toBe(1);
+  });
+
 });
