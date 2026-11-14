@@ -1,7 +1,12 @@
 import { spawn } from 'node:child_process';
 
+const isWindows = process.platform === 'win32';
 const children = ['backend', 'frontend'].map((workspace) =>
-  spawn('npm', ['run', 'dev', '--workspace', workspace], { stdio: 'inherit', detached: process.platform !== 'win32' }),
+  spawn(isWindows ? 'npm.cmd' : 'npm', ['run', 'dev', '--workspace', workspace], {
+    stdio: 'inherit',
+    detached: !isWindows,
+    shell: isWindows
+  }),
 );
 let stopping = false;
 function stop(code) {
@@ -19,7 +24,10 @@ function stop(code) {
   }
 }
 for (const child of children) {
-  child.on('error', () => stop(1));
+  child.on('error', (error) => {
+    console.error(`No se pudo iniciar un workspace de desarrollo: ${error.message}`);
+    stop(1);
+  });
   child.on('exit', (code, signal) => { if (!stopping) stop(code ?? (signal ? 1 : 0)); });
 }
 process.on('SIGINT', () => stop(130));
