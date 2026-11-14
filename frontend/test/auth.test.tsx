@@ -91,7 +91,8 @@ describe('T024: rutas protegidas', () => {
     expect(await tituloLogin()).toBeInTheDocument();
     expect(router.state.location.pathname).toBe('/login');
     expect(screen.queryByRole('navigation', { name: 'Navegación principal' })).not.toBeInTheDocument();
-    expect(document.title).toBe('Iniciar sesión · GymTrack');
+    // El título se fija en un efecto tras pintar: se espera en lugar de leerlo en el mismo instante.
+    await waitFor(() => expect(document.title).toBe('Iniciar sesión · GymTrack'));
   });
 
   it('con sesión, /login y /registro llevan a la aplicación', async () => {

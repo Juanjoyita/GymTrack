@@ -94,9 +94,19 @@ export function crearCola(usuarioId: string, almacen: Almacen = localStorage) {
     pendientes: () => estado.pendientes,
     conflictos: () => estado.conflictos,
 
-    /** Retira una operación solo cuando el servidor la confirmó. */
-    confirmar(operacionId: string) {
-      guardar({ ...estado, pendientes: estado.pendientes.filter((o) => o.id !== operacionId) });
+    /**
+     * Retira una operación solo cuando el servidor la confirmó. Si la respuesta trae la versión nueva
+     * del recurso, las operaciones siguientes sobre ese recurso la heredan (p. ej., guardar la nota y
+     * después finalizar): así no chocan con su propio cambio anterior.
+     */
+    confirmar(operacionId: string, respuesta?: unknown) {
+      const confirmada = estado.pendientes.find((o) => o.id === operacionId);
+      const version = (respuesta as { version?: unknown } | null | undefined)?.version;
+      const pendientes = estado.pendientes
+        .filter((o) => o.id !== operacionId)
+        .map((o) => (typeof version === 'number' && confirmada && o.recurso === confirmada.recurso && o.version !== undefined
+          ? { ...conVersion(o, version), id: o.id, creadaEn: o.creadaEn } : o));
+      guardar({ ...estado, pendientes });
     },
 
     /** Saca la operación de la cola sin aplicarla, junto con las que dependen de ella. */

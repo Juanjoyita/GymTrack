@@ -40,7 +40,7 @@ export function crearSincronizador(cola: Cola, enviar: Enviar = solicitar, opcio
       if (!operacion) return;
       try {
         const respuesta = await enviar(operacion.ruta, { method: operacion.metodo, cuerpo: operacion.cuerpo });
-        cola.confirmar(operacion.id);
+        cola.confirmar(operacion.id, respuesta);
         opciones.alConfirmar?.(operacion, respuesta);
       } catch (error) {
         if (esTransitorio(error) || !(error instanceof ErrorApi)) return;

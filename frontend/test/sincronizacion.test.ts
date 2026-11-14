@@ -201,6 +201,22 @@ describe('T026: sincronizador', () => {
     expect(cola.repetir(cola.conflictos()[0].id).ruta).toBe(`/x/${SERIE}?version=2`);
   });
 
+  it('encadena versiones: al confirmar un cambio, los siguientes sobre el mismo recurso usan la versión nueva', async () => {
+    const cola = crearCola(ANA, almacen);
+    cola.encolar({ metodo: 'PATCH', ruta: '/entrenamientos/e1', cuerpo: { nota: 'a', version: 1 }, recurso: 'e1', version: 1 });
+    cola.encolar({ metodo: 'POST', ruta: '/entrenamientos/e1/finalizar', cuerpo: { version: 1 }, recurso: 'e1', version: 1 });
+    cola.encolar({ metodo: 'DELETE', ruta: '/entrenamientos/e1?version=1', recurso: 'e1', version: 1 });
+    cola.encolar({ metodo: 'PATCH', ruta: '/otro', cuerpo: { version: 1 }, recurso: 'otro', version: 1 });
+    const enviar = vi.fn<Enviar>().mockResolvedValueOnce({ id: 'e1', version: 2 }).mockRejectedValue(new ErrorRed());
+    await crearSincronizador(cola, enviar).sincronizar();
+    expect(cola.pendientes().map((o) => [o.recurso, o.version, o.cuerpo, o.ruta])).toEqual([
+      ['e1', 2, { version: 2 }, '/entrenamientos/e1/finalizar'],
+      ['e1', 2, undefined, '/entrenamientos/e1?version=2'],
+      ['otro', 1, { version: 1 }, '/otro'],
+    ]);
+    expect(crearCola(ANA, almacen).pendientes()[0].version).toBe(2);
+  });
+
   it('no ejecuta dos sincronizaciones a la vez', async () => {
     const cola = crearCola(ANA, almacen);
     cola.encolar(crearRealizado());

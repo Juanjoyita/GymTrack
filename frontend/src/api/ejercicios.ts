@@ -29,3 +29,8 @@ export const renombrarEjercicio = (id: string, nombre: string) =>
   solicitar<Ejercicio>(`/ejercicios/${id}`, { method: 'PATCH', cuerpo: { nombre } });
 
 export const eliminarEjercicio = (id: string) => solicitar<void>(`/ejercicios/${id}`, { method: 'DELETE' });
+
+/** Series de la última sesión finalizada con este ejercicio, para prellenar (FR-009). */
+export interface UltimaSesion { entrenamientoId: string; fecha: string; series: { orden: number; repeticiones: number; pesoKg: number }[] }
+
+export const obtenerUltimaSesion = (ejercicioId: string) => solicitar<UltimaSesion | null>(`/ejercicios/${ejercicioId}/ultima-sesion`);

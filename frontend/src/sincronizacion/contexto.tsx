@@ -1,12 +1,16 @@
 import { useQueryClient } from '@tanstack/react-query';
-import { createContext, useContext, useEffect, useMemo, useSyncExternalStore, type ReactNode } from 'react';
-import { CLAVE_EN_CURSO, type EjercicioRealizado, type Entrenamiento } from '../api/entrenamientos';
+import { createContext, useContext, useEffect, useMemo, useRef, useSyncExternalStore, type ReactNode } from 'react';
+import { CLAVE_EN_CURSO, type Entrenamiento } from '../api/entrenamientos';
 import { registrarLimpiezaDeSesion } from '../app/sesion';
-import { crearCola, type Cola } from './cola';
+import { aplicarOperacion } from '../paginas/entrenamiento/operaciones';
+import { guardarCopia } from '../paginas/entrenamiento/copiaLocal';
+import { crearCola, type Cola, type Operacion } from './cola';
 import { crearSincronizador } from './sincronizador';
 
-const ContextoCola = createContext<Cola | null>(null);
-const RUTA_EJERCICIOS = /^\/entrenamientos\/[^/]+\/ejercicios$/;
+type AlConfirmar = (operacion: Operacion, respuesta: unknown) => void;
+interface Sincronizacion { cola: Cola; suscribirConfirmaciones: (fn: AlConfirmar) => () => void; avisarConfirmacion: AlConfirmar }
+
+const ContextoSincronizacion = createContext<Sincronizacion | null>(null);
 
 /**
  * Cola y sincronizador del usuario con sesión. Al cerrar sesión o cambiar de usuario se detienen,
@@ -14,38 +18,52 @@ const RUTA_EJERCICIOS = /^\/entrenamientos\/[^/]+\/ejercicios$/;
  */
 export function ProveedorSincronizacion({ usuarioId, children }: { usuarioId: string; children: ReactNode }) {
   const cliente = useQueryClient();
-  const cola = useMemo(() => crearCola(usuarioId), [usuarioId]);
+  const valor = useMemo<Sincronizacion>(() => {
+    const confirmaciones = new Set<AlConfirmar>();
+    return {
+      cola: crearCola(usuarioId),
+      suscribirConfirmaciones: (fn) => { confirmaciones.add(fn); return () => { confirmaciones.delete(fn); }; },
+      avisarConfirmacion: (op, r) => { for (const fn of confirmaciones) fn(op, r); },
+    };
+  }, [usuarioId]);
+
+  // Copia local del entrenamiento en curso: se actualiza cada vez que cambian los datos del servidor.
+  useEffect(() => cliente.getQueryCache().subscribe((evento) => {
+    const { queryKey, state } = evento.query;
+    if (queryKey[0] === CLAVE_EN_CURSO[0] && queryKey[1] === CLAVE_EN_CURSO[1] && state.data !== undefined) {
+      guardarCopia(usuarioId, state.data as Entrenamiento | null);
+    }
+  }), [cliente, usuarioId]);
 
   useEffect(() => {
+    const { cola, avisarConfirmacion } = valor;
     const sincronizador = crearSincronizador(cola, undefined, {
       alConfirmar: (operacion, respuesta) => {
-        // El ejercicio confirmado pasa del estado pendiente a los datos del servidor sin parpadeo.
-        // La respuesta ya trae el recurso confirmado: basta con incorporarlo, sin volver a pedir todo.
-        if (operacion.metodo === 'POST' && RUTA_EJERCICIOS.test(operacion.ruta)) {
-          const realizado = respuesta as EjercicioRealizado;
-          cliente.setQueryData<Entrenamiento | null>(CLAVE_EN_CURSO, (actual) => actual && !actual.ejercicios.some((e) => e.id === realizado.id)
-            ? { ...actual, ejercicios: [...actual.ejercicios, realizado] } : actual);
-          const incorporado = cliente.getQueryData<Entrenamiento | null>(CLAVE_EN_CURSO)?.ejercicios.some((e) => e.id === realizado.id);
-          if (incorporado && cliente.getQueryState(CLAVE_EN_CURSO)?.fetchStatus === 'idle') return;
-        }
-        // Una carga en vuelo pedida antes de la confirmación traería datos viejos. Sin datos previos,
-        // invalidar la reutilizaría en vez de cancelarla: se cancela explícitamente y se pide de nuevo.
-        void cliente.cancelQueries({ queryKey: CLAVE_EN_CURSO }).then(() => cliente.invalidateQueries({ queryKey: CLAVE_EN_CURSO }));
+        // La respuesta trae el recurso confirmado: se incorpora a los datos sin volver a pedir todo.
+        const aplicar = () => cliente.setQueryData<Entrenamiento | null>(CLAVE_EN_CURSO, (actual) => (actual === undefined ? actual : aplicarOperacion(actual, operacion, respuesta)));
+        // Una carga en vuelo pedida antes de la confirmación traería datos viejos y pisaría el cambio
+        // (y sin datos previos TanStack la reutilizaría al invalidar): se cancela, se aplica y se pide de nuevo.
+        const enVuelo = cliente.getQueryState(CLAVE_EN_CURSO)?.fetchStatus === 'fetching' || cliente.getQueryData(CLAVE_EN_CURSO) === undefined;
+        if (enVuelo) void cliente.cancelQueries({ queryKey: CLAVE_EN_CURSO }).then(() => { aplicar(); return cliente.invalidateQueries({ queryKey: CLAVE_EN_CURSO }); });
+        else aplicar();
+        avisarConfirmacion(operacion, respuesta);
       },
     });
     sincronizador.iniciar();
     const quitarLimpieza = registrarLimpiezaDeSesion(() => sincronizador.detener());
     return () => { sincronizador.detener(); quitarLimpieza(); };
-  }, [cola, cliente]);
+  }, [valor, cliente]);
 
-  return <ContextoCola.Provider value={cola}>{children}</ContextoCola.Provider>;
+  return <ContextoSincronizacion.Provider value={valor}>{children}</ContextoSincronizacion.Provider>;
 }
 
-export function useCola() {
-  const cola = useContext(ContextoCola);
-  if (!cola) throw new Error('useCola requiere ProveedorSincronizacion.');
-  return cola;
+function useSincronizacion() {
+  const valor = useContext(ContextoSincronizacion);
+  if (!valor) throw new Error('Se requiere ProveedorSincronizacion.');
+  return valor;
 }
+
+export const useCola = () => useSincronizacion().cola;
 
 export function usePendientes() {
   const cola = useCola();
@@ -55,4 +73,12 @@ export function usePendientes() {
 export function useConflictos() {
   const cola = useCola();
   return useSyncExternalStore(cola.suscribir, cola.conflictos);
+}
+
+/** Avisa a la página cuando el servidor confirma una operación (p. ej., el resultado de finalizar). */
+export function useAlConfirmar(fn: AlConfirmar) {
+  const { suscribirConfirmaciones } = useSincronizacion();
+  const ultima = useRef(fn);
+  ultima.current = fn;
+  useEffect(() => suscribirConfirmaciones((op, r) => ultima.current(op, r)), [suscribirConfirmaciones]);
 }

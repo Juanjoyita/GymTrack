@@ -1,6 +1,6 @@
 import { GRUPOS_MUSCULARES, esquemaEjercicio, normalizarNombre } from '@gymtrack/domain';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useDeferredValue, useEffect, useRef, useState, type FormEvent, type HTMLAttributes } from 'react';
+import { useDeferredValue, useEffect, useId, useRef, useState, type FormEvent, type HTMLAttributes } from 'react';
 import { ErrorApi, ErrorRed } from '../../api/cliente';
 import { crearEjercicio, eliminarEjercicio, listarEjercicios, renombrarEjercicio, type Ejercicio, type UsoEjercicio } from '../../api/ejercicios';
 import { Boton } from '../../componentes/Boton';
@@ -142,11 +142,13 @@ export function SelectorEjercicio({ onElegir, onCerrar }: SelectorEjercicioProps
 
 function FilaEjercicio({ ejercicio, onElegir, onRenombrar, onEliminar }: { ejercicio: Ejercicio; onElegir: () => void; onRenombrar: () => void; onEliminar: () => void }) {
   const iconoBoton = `${AREA_TACTIL} ${FOCO_VISIBLE} flex items-center justify-center rounded-xl text-slate-400 hover:bg-white/10 hover:text-white`;
+  const idDetalle = useId();
   return (
     <div className="flex items-center gap-1 rounded-2xl border border-white/10 bg-slate-900 pr-1 transition-colors hover:border-white/25">
-      <button type="button" onClick={onElegir} className={`${FOCO_VISIBLE} flex min-h-14 flex-1 flex-col items-start justify-center rounded-2xl px-4 py-2 text-left`}>
+      {/* Nombre accesible = nombre del ejercicio; el grupo muscular queda como descripción. */}
+      <button type="button" onClick={onElegir} aria-label={ejercicio.nombre} aria-describedby={idDetalle} className={`${FOCO_VISIBLE} flex min-h-14 flex-1 flex-col items-start justify-center rounded-2xl px-4 py-2 text-left`}>
         <span className="text-base font-semibold text-white">{ejercicio.nombre}</span>
-        <span className="text-sm text-slate-400">
+        <span id={idDetalle} className="text-sm text-slate-400">
           {textos.gruposMusculares[ejercicio.grupoMuscular]}{ejercicio.propio ? ` · ${t.propio}` : ''}
         </span>
       </button>
