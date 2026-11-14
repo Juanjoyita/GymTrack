@@ -3,7 +3,6 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { randomUUID } from 'node:crypto';
 import { DataSource, Repository } from 'typeorm';
 import { Entrenamiento, type EntrenamientoRow } from '../database/entities/entrenamiento';
-import { EjercicioRealizado } from '../database/entities/ejercicio_realizado';
 import { Serie } from '../database/entities/serie';
 
 const conflictoActivo = () => new ConflictException({ codigo: 'ENTRENAMIENTO_EN_CURSO', mensaje: 'Ya existe un entrenamiento en curso.', campos: null, actual: null });
@@ -73,10 +72,20 @@ export class SesionesService {
     });
   }
 
-  async descartar(usuarioId: string, id: string) {
-    const row = await this.entrenamientos.findOne({ where: { id, usuario_id: usuarioId } });
-    if (!row) throw noEncontrado();
-    // Descartar es una eliminación explícita iniciada por el usuario; la cascada elimina sus detalles.
-    await this.entrenamientos.remove(row);
+  async descartar(usuarioId: string, id: string, version: number) {
+    if (!Number.isInteger(version) || version < 1) {
+      throw new BadRequestException({ codigo: 'VALIDACION', mensaje: 'Revisa los campos marcados.', campos: { version: 'Valor inválido.' }, actual: null });
+    }
+    const result = await this.entrenamientos.createQueryBuilder()
+      .delete()
+      .from(Entrenamiento)
+      .where('id = :id AND usuario_id = :usuarioId AND version = :version', { id, usuarioId, version })
+      .returning('*')
+      .execute();
+    if (result.affected === 1) return;
+
+    const current = await this.entrenamientos.findOne({ where: { id, usuario_id: usuarioId } });
+    if (!current) throw noEncontrado();
+    throw new ConflictException({ codigo: 'CONFLICTO_VERSION', mensaje: 'La versión del recurso ha cambiado.', campos: null, actual: current });
   }
 }
