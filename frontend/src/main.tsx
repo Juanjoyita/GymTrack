@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { RouterProvider, createBrowserRouter } from 'react-router-dom';
 import { Proveedores } from './app/Proveedores';
 import { rutas } from './app/rutas';
+import { registroServiceWorker } from './registrar-sw';
 import './styles.css';
 
 const router = createBrowserRouter(rutas);
@@ -17,3 +18,6 @@ createRoot(raiz).render(
     </Proveedores>
   </StrictMode>,
 );
+
+// Shell disponible sin conexión tras la primera carga online (T026A). Solo en producción.
+void registroServiceWorker.registrar();

@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
-import { ErrorApi } from '../api/cliente';
+import { ErrorApi, ErrorRed } from '../api/cliente';
 import { cerrarSesion, iniciarSesion, obtenerSesion, registrarse, type Credenciales, type Usuario } from '../api/auth';
 
 export const CLAVE_SESION = ['sesion'] as const;
@@ -8,6 +8,33 @@ export const CLAVE_SESION = ['sesion'] as const;
 export const META_ACCESO = { acceso: true } as const;
 
 const limpiezas = new Set<() => void>();
+
+// Última sesión válida (solo id, email, unidad y zona; nunca contraseña ni token). Se usa únicamente
+// si la red falla, para que el shell en caché siga siendo usable al recargar sin conexión (T026A).
+const CLAVE_ULTIMA_SESION = 'gymtrack:ultima-sesion';
+
+function recordarSesion(usuario: Usuario | null) {
+  try {
+    if (usuario) localStorage.setItem(CLAVE_ULTIMA_SESION, JSON.stringify({ id: usuario.id, email: usuario.email, unidadPeso: usuario.unidadPeso, zonaHoraria: usuario.zonaHoraria }));
+    else localStorage.removeItem(CLAVE_ULTIMA_SESION);
+  } catch { /* Sin almacenamiento disponible: solo se pierde el acceso sin red. */ }
+}
+
+function sesionRecordada(): Usuario | null {
+  try { return JSON.parse(localStorage.getItem(CLAVE_ULTIMA_SESION) ?? 'null') as Usuario | null; } catch { return null; }
+}
+
+async function consultarSesion() {
+  try {
+    const usuario = await obtenerSesion();
+    recordarSesion(usuario);
+    return usuario;
+  } catch (error) {
+    const recordada = error instanceof ErrorRed ? sesionRecordada() : null;
+    if (recordada) return recordada;
+    throw error;
+  }
+}
 
 /**
  * Registra una tarea que debe ejecutarse al cambiar de usuario, cerrar sesión o caducar la sesión.
@@ -27,6 +54,7 @@ function limpiarDatosDeUsuario(cliente: QueryClient) {
 
 function establecerUsuario(cliente: QueryClient, usuario: Usuario | null) {
   limpiarDatosDeUsuario(cliente);
+  recordarSesion(usuario);
   cliente.setQueryData(CLAVE_SESION, usuario);
 }
 
@@ -37,7 +65,8 @@ export function marcarSesionCaducada(cliente: QueryClient) {
 }
 
 export function useSesion() {
-  return useQuery({ queryKey: CLAVE_SESION, queryFn: obtenerSesion, staleTime: Infinity });
+  // Sin reintentos automáticos: sin red se usa al momento la sesión recordada o se ofrece «Reintentar».
+  return useQuery({ queryKey: CLAVE_SESION, queryFn: consultarSesion, staleTime: Infinity, retry: false });
 }
 
 export function useIniciarSesion() {

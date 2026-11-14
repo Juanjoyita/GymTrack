@@ -6,6 +6,7 @@ export const textos = {
   },
   shell: {
     saltarAlContenido: 'Saltar al contenido',
+    disponibleSinConexion: 'Disponible sin conexión',
     proximamente: 'Próximamente',
     queIncluira: 'Qué podrás hacer aquí',
   },

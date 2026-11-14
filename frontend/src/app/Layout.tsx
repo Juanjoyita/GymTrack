@@ -1,7 +1,8 @@
 import { useEffect, useRef } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { AREA_TACTIL, FOCO_VISIBLE } from '../componentes/estilos';
-import { IconoMancuerna } from '../componentes/Iconos';
+import { IconoCheck, IconoMancuerna } from '../componentes/Iconos';
+import { useDisponibleSinConexion } from '../registrar-sw';
 import { textos } from '../textos/es';
 import { SECCIONES } from './secciones';
 
@@ -29,6 +30,7 @@ function useFocoAlNavegar() {
 
 export function Layout() {
   const contenido = useFocoAlNavegar();
+  const sinConexion = useDisponibleSinConexion();
 
   return (
     <div className="flex min-h-dvh flex-col bg-slate-950 text-slate-100">
@@ -44,6 +46,11 @@ export function Layout() {
             <IconoMancuerna className="size-5" />
           </span>
           <p className="font-display text-2xl font-extrabold italic leading-none">{textos.app.nombre}</p>
+          {sinConexion && (
+            <p className="ml-auto inline-flex items-center gap-1 text-xs font-medium text-slate-400">
+              <IconoCheck className="size-3.5 text-lime-300" />{textos.shell.disponibleSinConexion}
+            </p>
+          )}
         </div>
       </header>
       <main id="contenido" ref={contenido} className="mx-auto w-full max-w-2xl flex-1 px-4 pb-28 pt-6">
