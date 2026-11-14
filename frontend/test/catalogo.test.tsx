@@ -95,6 +95,7 @@ function crearApi() {
 let api: ReturnType<typeof crearApi>;
 
 beforeEach(() => {
+  localStorage.clear();
   api = crearApi();
   vi.stubGlobal('fetch', api.fetchFalso);
 });

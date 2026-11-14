@@ -36,6 +36,8 @@ export interface Entrenamiento {
   resumen: { ejercicios: number; series: number; volumenKg: number; duracionMin: number | null };
 }
 
+export const CLAVE_EN_CURSO = ['entrenamiento', 'en-curso'] as const;
+
 /** Entrenamiento en curso, o null si no hay ninguno (204). */
 export async function obtenerEntrenamientoEnCurso() {
   return (await solicitar<Entrenamiento | undefined>('/entrenamientos/en-curso')) ?? null;

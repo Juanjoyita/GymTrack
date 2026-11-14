@@ -4,6 +4,7 @@ import { IconoCargando, IconoMancuerna } from '../componentes/Iconos';
 import { AvisoError } from '../paginas/auth/AvisoError';
 import { ErrorRed } from '../api/cliente';
 import { textos } from '../textos/es';
+import { ProveedorSincronizacion } from '../sincronizacion/contexto';
 import { useSesion } from './sesion';
 
 interface EstadoNavegacion { desde?: string }
@@ -37,7 +38,7 @@ export function RutaPrivada() {
   if (sesion.isPending) return <PantallaSesion />;
   if (sesion.isError) return <PantallaSesion error={sesion.error} reintentar={() => sesion.refetch()} />;
   if (!sesion.data) return <Navigate to="/login" replace state={{ desde: `${pathname}${search}` } satisfies EstadoNavegacion} />;
-  return <Outlet />;
+  return <ProveedorSincronizacion usuarioId={sesion.data.id}><Outlet /></ProveedorSincronizacion>;
 }
 
 /** /login y /registro: con sesión iniciada se vuelve a la página pedida o al inicio. */

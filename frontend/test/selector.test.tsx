@@ -2,7 +2,7 @@ import { normalizarNombre } from '@gymtrack/domain';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { RouterProvider, createMemoryRouter } from 'react-router-dom';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Proveedores } from '../src/app/Proveedores';
 import { rutas } from '../src/app/rutas';
 
@@ -73,6 +73,7 @@ async function abrir(usuario: ReturnType<typeof userEvent.setup>) {
   return { boton, selector: await screen.findByRole('dialog', { name: 'Elegir ejercicio' }) };
 }
 
+beforeEach(() => { localStorage.clear(); });
 afterEach(() => { vi.unstubAllGlobals(); });
 
 describe('T025: entrenamiento en curso', () => {

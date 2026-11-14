@@ -98,8 +98,9 @@ export const textos = {
     desde: 'Desde las',
     sinEjercicios: 'Añade el primer ejercicio para empezar a registrar series.',
     sinSeries: 'Sin series todavía',
+    pendiente: 'Pendiente de sincronizar',
+    conflictos: (n: number) => `${n === 1 ? 'Hay 1 cambio que' : `Hay ${n} cambios que`} el servidor no aceptó. Pronto podrás revisarlos aquí.`,
     anadirEjercicio: 'Añadir ejercicio',
-    errorAnadir: (nombre: string) => `No se pudo añadir «${nombre}». Inténtalo de nuevo.`,
   },
   selector: {
     titulo: 'Elegir ejercicio',
