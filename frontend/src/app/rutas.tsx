@@ -2,6 +2,7 @@ import type { RouteObject } from 'react-router-dom';
 import { PaginaLogin } from '../paginas/auth/PaginaLogin';
 import { PaginaRegistro } from '../paginas/auth/PaginaRegistro';
 import { CerrarSesion } from '../paginas/auth/CerrarSesion';
+import { PaginaEntrenar } from '../paginas/entrenamiento/PaginaEntrenar';
 import { Layout } from './Layout';
 import { NoEncontrada } from './NoEncontrada';
 import { PaginaSeccion } from './PaginaSeccion';
@@ -23,7 +24,7 @@ export const rutas: RouteObject[] = [
       element: <Layout />,
       children: [
         ...SECCIONES.map((seccion) => {
-          const element = (
+          const element = seccion.clave === 'entrenar' ? <PaginaEntrenar /> : (
             <PaginaSeccion seccion={seccion}>
               {seccion.clave === 'cuenta' && <CerrarSesion />}
             </PaginaSeccion>

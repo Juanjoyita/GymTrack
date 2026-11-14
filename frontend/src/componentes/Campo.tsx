@@ -1,4 +1,4 @@
-import { useId, type InputHTMLAttributes } from 'react';
+import { forwardRef, useId, type InputHTMLAttributes } from 'react';
 import { AREA_TACTIL, FOCO_VISIBLE } from './estilos';
 import { IconoAlerta } from './Iconos';
 
@@ -10,7 +10,7 @@ export interface CampoProps extends Omit<InputHTMLAttributes<HTMLInputElement>, 
   ayuda?: string;
 }
 
-export function Campo({ etiqueta, error, ayuda, className = '', ...props }: CampoProps) {
+export const Campo = forwardRef<HTMLInputElement, CampoProps>(function Campo({ etiqueta, error, ayuda, className = '', ...props }, ref) {
   const id = useId();
   const idError = `${id}-error`;
   const idAyuda = `${id}-ayuda`;
@@ -24,6 +24,7 @@ export function Campo({ etiqueta, error, ayuda, className = '', ...props }: Camp
         {etiqueta}
       </label>
       <input
+        ref={ref}
         id={id}
         aria-invalid={error ? true : undefined}
         aria-describedby={descripcion}
@@ -43,4 +44,4 @@ export function Campo({ etiqueta, error, ayuda, className = '', ...props }: Camp
       )}
     </div>
   );
-}
+});

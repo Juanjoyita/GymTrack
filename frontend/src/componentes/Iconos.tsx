@@ -65,3 +65,23 @@ export const IconoSalir = (p: PropsIcono) => (
 export const IconoCargando = (p: PropsIcono) => (
   <Icono {...p}><path d="M21 12a9 9 0 1 1-6.2-8.6" /></Icono>
 );
+
+export const IconoMas = (p: PropsIcono) => (
+  <Icono {...p}><path d="M12 5v14M5 12h14" /></Icono>
+);
+
+export const IconoCerrar = (p: PropsIcono) => (
+  <Icono {...p}><path d="M6 6l12 12M18 6 6 18" /></Icono>
+);
+
+export const IconoBuscar = (p: PropsIcono) => (
+  <Icono {...p}><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></Icono>
+);
+
+export const IconoLapiz = (p: PropsIcono) => (
+  <Icono {...p}><path d="M4 20h4L19 9l-4-4L4 16z" /><path d="m13.5 6.5 4 4" /></Icono>
+);
+
+export const IconoPapelera = (p: PropsIcono) => (
+  <Icono {...p}><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3" /></Icono>
+);

@@ -9,8 +9,11 @@ import { textos } from '../src/textos/es';
 // Desde T024 las secciones son privadas: se simula una sesión iniciada (GET /auth/yo → 200).
 const USUARIO = { id: '00000000-0000-4000-8000-000000000101', email: 't010@example.invalid', unidadPeso: 'kg', zonaHoraria: 'America/Bogota' };
 
+// Desde T025, Entrenar consulta el entrenamiento en curso: aquí no hay ninguno (204).
 beforeEach(() => {
-  vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify(USUARIO), { status: 200, headers: { 'Content-Type': 'application/json' } })));
+  vi.stubGlobal('fetch', vi.fn(async (entrada: RequestInfo | URL) => (String(entrada).endsWith('/auth/yo')
+    ? new Response(JSON.stringify(USUARIO), { status: 200, headers: { 'Content-Type': 'application/json' } })
+    : new Response(null, { status: 204 }))));
 });
 afterEach(() => { vi.unstubAllGlobals(); });
 
@@ -33,8 +36,8 @@ const SECCIONES = [
   { ruta: '/cuenta', nombre: textos.navegacion.cuenta },
 ];
 
+// Secciones que aún son marcadores «Próximamente». Entrenar dejó de serlo en T025.
 const RUTA_POR_SECCION = {
-  entrenar: '/',
   historial: '/historial',
   progreso: '/progreso',
   rutinas: '/rutinas',
