@@ -1,47 +1,48 @@
-import { IconoCheck, IconoReloj } from '../componentes/Iconos';
+import type { ReactNode } from 'react';
+import { IconoReloj } from '../componentes/Iconos';
 import { textos } from '../textos/es';
 import type { Seccion } from './secciones';
 import { useTituloDocumento } from './useTituloDocumento';
 
 // Marcador de cada sección mientras se implementa su historia (US1–US5): explica qué incluirá.
-export function PaginaSeccion({ seccion }: { seccion: Seccion }) {
+// El título va directo sobre el fondo; el lima se reserva para acciones y la sección activa.
+export function PaginaSeccion({ seccion, children }: { seccion: Seccion; children?: ReactNode }) {
   const { clave, nombre, Icono } = seccion;
   const { descripcion, incluira } = textos.secciones[clave];
   useTituloDocumento(nombre);
 
   return (
-    <section aria-labelledby="titulo-pagina" className="flex flex-col gap-4">
-      <div className="overflow-hidden rounded-3xl bg-slate-950 p-6 text-white shadow-lg">
-        <div className="flex items-start justify-between gap-3">
-          <span className="flex size-14 items-center justify-center rounded-2xl bg-lime-300 text-slate-950">
-            <Icono className="size-8" />
+    <section aria-labelledby="titulo-pagina" className="flex flex-col gap-8">
+      <div>
+        <div className="flex items-center justify-between gap-3">
+          <span className="flex size-12 items-center justify-center rounded-2xl border border-white/10 bg-white/5 text-lime-300">
+            <Icono className="size-6" />
           </span>
-          <span className="inline-flex items-center gap-1.5 rounded-full border border-white/30 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-lime-200">
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-white/15 px-3 py-1 text-sm font-semibold text-slate-300">
             <IconoReloj className="size-4" />
             {textos.shell.proximamente}
           </span>
         </div>
-        <h1 id="titulo-pagina" tabIndex={-1} className="mt-6 text-3xl font-extrabold tracking-tight focus:outline-none">
+        <h1 id="titulo-pagina" tabIndex={-1} className="mt-6 font-display text-6xl font-extrabold italic leading-none text-white focus:outline-none">
           {nombre}
         </h1>
-        <p className="mt-2 text-base leading-relaxed text-slate-300">{descripcion}</p>
+        <p className="mt-3 max-w-prose text-lg leading-relaxed text-slate-300">{descripcion}</p>
       </div>
 
-      <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-        <h2 id="que-incluira" className="text-sm font-bold uppercase tracking-wider text-slate-600">
+      <div className="border-t border-white/10 pt-6">
+        <h2 id="que-incluira" className="text-base font-bold text-white">
           {textos.shell.queIncluira}
         </h2>
         <ul aria-labelledby="que-incluira" className="mt-4 flex flex-col gap-3">
           {incluira.map((elemento) => (
-            <li key={elemento} className="flex items-start gap-3 text-base text-slate-800">
-              <span className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full bg-lime-100 text-lime-800">
-                <IconoCheck className="size-4" />
-              </span>
+            <li key={elemento} className="flex items-start gap-3 text-base text-slate-300">
+              <span aria-hidden="true" className="mt-2.5 h-0.5 w-4 shrink-0 rounded-full bg-slate-500" />
               {elemento}
             </li>
           ))}
         </ul>
       </div>
+      {children}
     </section>
   );
 }

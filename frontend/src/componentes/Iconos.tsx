@@ -52,3 +52,36 @@ export const IconoReloj = (p: PropsIcono) => (
 export const IconoBrujula = (p: PropsIcono) => (
   <Icono {...p}><circle cx="12" cy="12" r="9" /><path d="m15.5 8.5-2 5-5 2 2-5z" /></Icono>
 );
+
+export const IconoAlerta = (p: PropsIcono) => (
+  <Icono {...p}><circle cx="12" cy="12" r="9" /><path d="M12 7.5v5M12 16.5h.01" /></Icono>
+);
+
+export const IconoSalir = (p: PropsIcono) => (
+  <Icono {...p}><path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3" /><path d="m10 17 5-5-5-5M15 12H4" /></Icono>
+);
+
+/** Indicador de actividad; gira solo si el usuario no pidió reducir el movimiento. */
+export const IconoCargando = (p: PropsIcono) => (
+  <Icono {...p}><path d="M21 12a9 9 0 1 1-6.2-8.6" /></Icono>
+);
+
+export const IconoMas = (p: PropsIcono) => (
+  <Icono {...p}><path d="M12 5v14M5 12h14" /></Icono>
+);
+
+export const IconoCerrar = (p: PropsIcono) => (
+  <Icono {...p}><path d="M6 6l12 12M18 6 6 18" /></Icono>
+);
+
+export const IconoBuscar = (p: PropsIcono) => (
+  <Icono {...p}><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></Icono>
+);
+
+export const IconoLapiz = (p: PropsIcono) => (
+  <Icono {...p}><path d="M4 20h4L19 9l-4-4L4 16z" /><path d="m13.5 6.5 4 4" /></Icono>
+);
+
+export const IconoPapelera = (p: PropsIcono) => (
+  <Icono {...p}><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3" /></Icono>
+);
