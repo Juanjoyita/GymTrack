@@ -2,7 +2,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { createContext, useContext, useEffect, useMemo, useRef, useSyncExternalStore, type ReactNode } from 'react';
 import { CLAVE_EN_CURSO, type Entrenamiento } from '../api/entrenamientos';
 import { registrarLimpiezaDeSesion } from '../app/sesion';
-import { aplicarOperacion } from '../paginas/entrenamiento/operaciones';
+import { aplicarOperacion, aplicarVigente, esDe, vista } from '../paginas/entrenamiento/operaciones';
 import { guardarCopia } from '../paginas/entrenamiento/copiaLocal';
 import { crearCola, type Cola, type Operacion } from './cola';
 import { crearSincronizador } from './sincronizador';
@@ -40,13 +40,28 @@ export function ProveedorSincronizacion({ usuarioId, children }: { usuarioId: st
     const sincronizador = crearSincronizador(cola, undefined, {
       alConfirmar: (operacion, respuesta) => {
         // La respuesta trae el recurso confirmado: se incorpora a los datos sin volver a pedir todo.
-        const aplicar = () => cliente.setQueryData<Entrenamiento | null>(CLAVE_EN_CURSO, (actual) => (actual === undefined ? actual : aplicarOperacion(actual, operacion, respuesta)));
+        // Se aplica a cada entrenamiento en caché (el que está en curso y los registrados a posteriori),
+        // solo si la operación es suya.
+        const aplicar = () => {
+          for (const { queryKey } of cliente.getQueryCache().findAll({ queryKey: ['entrenamiento'] })) {
+            cliente.setQueryData<Entrenamiento | null>(queryKey, (actual) => (actual === undefined || !esDe(operacion, actual) ? actual : aplicarOperacion(actual, operacion, respuesta)));
+          }
+        };
         // Una carga en vuelo pedida antes de la confirmación traería datos viejos y pisaría el cambio
         // (y sin datos previos TanStack la reutilizaría al invalidar): se cancela, se aplica y se pide de nuevo.
         const enVuelo = cliente.getQueryState(CLAVE_EN_CURSO)?.fetchStatus === 'fetching' || cliente.getQueryData(CLAVE_EN_CURSO) === undefined;
         if (enVuelo) void cliente.cancelQueries({ queryKey: CLAVE_EN_CURSO }).then(() => { aplicar(); return cliente.invalidateQueries({ queryKey: CLAVE_EN_CURSO }); });
         else aplicar();
         avisarConfirmacion(operacion, respuesta);
+      },
+      alConflicto: (conflictos) => {
+        // La vista muestra la versión vigente mientras el usuario decide (repetir o descartar).
+        for (const { queryKey } of cliente.getQueryCache().findAll({ queryKey: ['entrenamiento'] })) {
+          cliente.setQueryData<Entrenamiento | null>(queryKey, (actual) => (actual === undefined ? actual
+            : conflictos.reduce<Entrenamiento | null>((e, c) => (esDe(c.operacion, e) ? aplicarVigente(e, c) : e), actual)));
+        }
+        // Si ya había uno en curso en otro dispositivo, se carga ese.
+        if (conflictos.some((c) => vista(c.operacion)?.tipo === 'iniciar')) void cliente.invalidateQueries({ queryKey: CLAVE_EN_CURSO });
       },
     });
     sincronizador.iniciar();

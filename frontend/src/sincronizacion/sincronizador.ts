@@ -40,8 +40,10 @@ export function crearSincronizador(cola: Cola, enviar: Enviar = solicitar, opcio
       if (!operacion) return;
       try {
         const respuesta = await enviar(operacion.ruta, { method: operacion.metodo, cuerpo: operacion.cuerpo });
-        cola.confirmar(operacion.id, respuesta);
+        // Primero se incorpora la respuesta a los datos y después se retira de la cola: si fuera al
+        // revés, durante un instante el recurso no estaría ni pendiente ni en los datos.
         opciones.alConfirmar?.(operacion, respuesta);
+        cola.confirmar(operacion.id, respuesta);
       } catch (error) {
         if (esTransitorio(error) || !(error instanceof ErrorApi)) return;
         const conflictos = cola.aConflicto(operacion.id, motivo(error), error.actual);

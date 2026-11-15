@@ -217,6 +217,19 @@ describe('T026: sincronizador', () => {
     expect(crearCola(ANA, almacen).pendientes()[0].version).toBe(2);
   });
 
+  it('incorpora la respuesta antes de retirar la operación: el dato nunca desaparece de la vista', async () => {
+    // Hallazgo real: si se retiraba primero, durante un instante el ejercicio no estaba ni pendiente
+    // ni en los datos, la tarjeta se volvía a montar y se perdía lo que el usuario estaba tecleando.
+    const cola = crearCola(ANA, almacen);
+    const op = cola.encolar(crearRealizado());
+    const vistoAlConfirmar: string[] = [];
+    await crearSincronizador(cola, vi.fn<Enviar>().mockResolvedValue({ id: ER }), {
+      alConfirmar: () => { vistoAlConfirmar.push(...cola.pendientes().map((o) => o.id)); },
+    }).sincronizar();
+    expect(vistoAlConfirmar).toEqual([op.id]);
+    expect(cola.pendientes()).toEqual([]);
+  });
+
   it('no ejecuta dos sincronizaciones a la vez', async () => {
     const cola = crearCola(ANA, almacen);
     cola.encolar(crearRealizado());

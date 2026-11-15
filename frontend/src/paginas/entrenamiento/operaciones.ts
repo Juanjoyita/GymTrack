@@ -1,5 +1,5 @@
 import type { EjercicioRealizado, Entrenamiento, Serie } from '../../api/entrenamientos';
-import type { NuevaOperacion, Operacion } from '../../sincronizacion/cola';
+import type { Conflicto, NuevaOperacion, Operacion } from '../../sincronizacion/cola';
 
 // Operaciones del entrenamiento que pasan por la cola duradera (R-08) y cómo se aplican al estado.
 // La misma función sirve para mostrar lo pendiente sobre la copia del servidor y para incorporar
@@ -7,8 +7,10 @@ import type { NuevaOperacion, Operacion } from '../../sincronizacion/cola';
 
 export type PesoEntrada = { valor: number; unidad: 'kg' | 'lb' };
 
-type Vista =
+export type Vista =
   | { tipo: 'iniciar'; entrenamiento: Entrenamiento }
+  | { tipo: 'registrar-pasado'; entrenamiento: Entrenamiento }
+  | { tipo: 'descartar' }
   | { tipo: 'ejercicio'; realizado: EjercicioRealizado }
   | { tipo: 'serie'; realizadoId: string; serie: Serie }
   | { tipo: 'editar-serie'; realizadoId: string; serieId: string; repeticiones: number; pesoKg: number }
@@ -17,7 +19,7 @@ type Vista =
   | { tipo: 'nota-ejercicio'; realizadoId: string; nota: string | null }
   | { tipo: 'finalizar' };
 
-const vista = (op: Operacion | NuevaOperacion) => op.vista as Vista | undefined;
+export const vista = (op: Operacion | NuevaOperacion) => op.vista as Vista | undefined;
 export const esFinalizar = (op: Operacion) => vista(op)?.tipo === 'finalizar';
 
 const ruta = (e: string) => `/entrenamientos/${e}`;
@@ -25,6 +27,17 @@ const ruta = (e: string) => `/entrenamientos/${e}`;
 export function opIniciar(entrenamiento: Entrenamiento): NuevaOperacion {
   const { id, inicio, zonaHoraria } = entrenamiento;
   return { metodo: 'POST', ruta: '/entrenamientos', recurso: id, cuerpo: { id, inicio, zonaHoraria }, vista: { tipo: 'iniciar', entrenamiento } };
+}
+
+/** Registro a posteriori (FR-014): se crea ya finalizado con su inicio y su fin. */
+export function opRegistrarPasado(entrenamiento: Entrenamiento): NuevaOperacion {
+  const { id, inicio, fin, zonaHoraria } = entrenamiento;
+  return { metodo: 'POST', ruta: '/entrenamientos', recurso: id, cuerpo: { id, inicio, fin, zonaHoraria }, vista: { tipo: 'registrar-pasado', entrenamiento } };
+}
+
+/** Descartar el entrenamiento (V7): lo elimina con sus series. */
+export function opDescartar(entrenamiento: Entrenamiento): NuevaOperacion {
+  return { metodo: 'DELETE', ruta: `${ruta(entrenamiento.id)}?version=${entrenamiento.version}`, recurso: entrenamiento.id, version: entrenamiento.version, dependeDe: [entrenamiento.id], vista: { tipo: 'descartar' } };
 }
 
 export function opAnadirEjercicio(entrenamientoId: string, realizado: EjercicioRealizado): NuevaOperacion {
@@ -80,7 +93,7 @@ const conRealizado = (e: Entrenamiento, id: string, cambio: (r: EjercicioRealiza
 export function aplicarOperacion(e: Entrenamiento | null, op: Operacion | NuevaOperacion, respuesta?: unknown): Entrenamiento | null {
   const v = vista(op);
   if (!v) return e;
-  if (v.tipo === 'iniciar') return e ?? (respuesta as Entrenamiento | undefined) ?? v.entrenamiento;
+  if (v.tipo === 'iniciar' || v.tipo === 'registrar-pasado') return e ?? (respuesta as Entrenamiento | undefined) ?? v.entrenamiento;
   if (!e) return e;
   switch (v.tipo) {
     case 'ejercicio': {
@@ -107,10 +120,44 @@ export function aplicarOperacion(e: Entrenamiento | null, op: Operacion | NuevaO
     }
     case 'finalizar':
       return respuesta === undefined ? e : null;
+    case 'descartar':
+      return null;
   }
+}
+
+/** ¿La operación es de este entrenamiento? (Puede haber uno en curso y otro registrado a posteriori.) */
+export function esDe(op: Operacion, e: Entrenamiento | null) {
+  if (!e) return vista(op)?.tipo === 'iniciar';
+  return op.recurso === e.id || op.ruta.startsWith(`${ruta(e.id)}/`) || op.ruta.startsWith(`${ruta(e.id)}?`) || op.ruta === ruta(e.id);
 }
 
 /** Entrenamiento tal como lo ve el usuario: la copia del servidor más lo que sigue en la cola. */
 export function conPendientes(base: Entrenamiento | null, pendientes: readonly Operacion[]) {
-  return pendientes.reduce((e, op) => aplicarOperacion(e, op), base);
+  return pendientes.reduce((e, op) => (esDe(op, e) ? aplicarOperacion(e, op) : e), base);
+}
+
+/**
+ * Ante un conflicto, la vista pasa a mostrar la versión vigente del servidor (FR-031): nunca se queda
+ * con el cambio rechazado como si se hubiera guardado.
+ */
+export function aplicarVigente(e: Entrenamiento | null, conflicto: Conflicto): Entrenamiento | null {
+  const v = vista(conflicto.operacion);
+  if (!e || !v) return e;
+  if ((v.tipo === 'editar-serie' || v.tipo === 'eliminar-serie')) {
+    const vigente = conflicto.actual as Serie | null;
+    return conRealizado(e, v.realizadoId, (r) => ({
+      ...r,
+      series: conflicto.motivo === 'ELIMINADO' ? r.series.filter((s) => s.id !== v.serieId)
+        : vigente ? r.series.map((s) => (s.id === v.serieId ? vigente : s)) : r.series,
+    }));
+  }
+  if ((v.tipo === 'nota' || v.tipo === 'finalizar' || v.tipo === 'descartar') && conflicto.motivo === 'CONFLICTO_VERSION') {
+    const vigente = conflicto.actual as Entrenamiento | null;
+    return vigente ? { ...e, nota: vigente.nota, version: vigente.version } : e;
+  }
+  if (v.tipo === 'nota-ejercicio' && conflicto.motivo === 'CONFLICTO_VERSION') {
+    const vigente = conflicto.actual as EjercicioRealizado | null;
+    return vigente ? conRealizado(e, v.realizadoId, (r) => ({ ...r, nota: vigente.nota, version: vigente.version })) : e;
+  }
+  return e;
 }
