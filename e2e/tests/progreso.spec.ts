@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import AxeBuilder from '@axe-core/playwright';
 import { hash, argon2id } from 'argon2';
 import { randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
@@ -165,18 +166,36 @@ test('muestra la evolución manual por periodo en un gráfico y una tabla equiva
     for (const id of ids) {
       const sesion = fixture.sesiones.find((item) => item.id === id);
       if (!sesion) throw new Error(`Sesión ${id} ausente del fixture manual.`);
-      await expect(page.getByRole('table')).toContainText(sesion.fecha);
-      await expect(page.getByRole('table')).toContainText(String(sesion.esperado.pesoMaxKg));
-      await expect(page.getByRole('table')).toContainText(String(sesion.esperado.volumenKg));
-      if (sesion.esperado.unoRmKg !== null) {
-        await expect(page.getByRole('table')).toContainText(String(Number(sesion.esperado.unoRmKg.toFixed(2))));
-      } else {
-        await expect(page.getByRole('table')).toContainText(/sin 1rm/i);
-      }
+      const fecha = new Intl.DateTimeFormat('es', {
+        day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC'
+      }).format(new Date(`${sesion.fecha}T00:00:00Z`));
+      const numero = (valor: number) => new Intl.NumberFormat('es', { maximumFractionDigits: 2 }).format(valor);
+      const fila = filas.filter({ has: page.getByRole('rowheader', { name: fecha, exact: true }) });
+      await expect(fila.getByRole('cell')).toHaveText([
+        numero(sesion.esperado.pesoMaxKg), numero(sesion.esperado.volumenKg),
+        sesion.esperado.unoRmKg === null ? 'Sin 1RM' : numero(sesion.esperado.unoRmKg)
+      ]);
     }
   }
   await expect(page.getByRole('img', { name: /gráfico de progreso/i })).toBeVisible();
   await expect(page.getByRole('table')).toBeVisible();
+  const records = page.getByRole('region', { name: /récords personales/i });
+  await expect(records).toContainText('75 kg');
+  await expect(records).toContainText('87,5 kg');
+  await expect(records).toContainText('868 kg');
+  await expect(records).toContainText('10 sept 2026');
+  expect((await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21aa']).analyze()).violations).toEqual([]);
+  await page.screenshot({ path: 'test-results/us3-progreso-movil.png', fullPage: true });
+  for (const control of await page.getByRole('combobox').all()) {
+    const caja = await control.boundingBox();
+    expect(caja?.width).toBeGreaterThanOrEqual(44);
+    expect(caja?.height).toBeGreaterThanOrEqual(44);
+    await control.focus();
+    await expect(control).toBeFocused();
+  }
+  await page.getByRole('combobox', { name: 'Ejercicio', exact: true }).focus();
+  await page.keyboard.press('Tab');
+  await expect(periodo).toBeFocused();
 });
 
 test('no avisa por varias series crecientes en la primera sesión del ejercicio', async ({ page }) => {
@@ -200,6 +219,9 @@ test('avisa de inmediato al superar los récords de peso máximo y 1RM', async (
   await agregarSerie(page, fixture.escenariosAvisos.superarPeso.series[0]);
   await expect(avisos(page)).toContainText(/récord.*peso máximo/i);
   await expect(avisos(page)).toContainText(/récord.*1rm/i);
+  await expect(page.getByRole('button', { name: /añadir serie/i }).last()).toBeFocused();
+  await expect(avisos(page)).toHaveAttribute('aria-live', 'polite');
+  expect((await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21aa']).analyze()).violations).toEqual([]);
 });
 
 test('no avisa al igualar un récord', async ({ page }) => {
@@ -224,6 +246,18 @@ test('difiere el récord de volumen hasta terminar y evita repetirlo al reabrir'
 
   await page.getByRole('button', { name: /terminar ejercicio/i }).click();
   await expect(avisos(page)).toContainText(/récord.*volumen/i);
+  // Confirmar persistencia real: no basta con que la cola local haya mostrado el aviso.
+  await expect.poll(async () => {
+    const filas = await source.query<Array<{ volumen: string }>>(
+      `SELECT er.volumen_notificado_kg AS volumen FROM ejercicio_realizado er
+       JOIN entrenamiento e ON e.id=er.entrenamiento_id
+       WHERE e.usuario_id=$1 AND e.estado='en_curso'`, [cuenta.id]
+    );
+    return Number(filas[0]?.volumen);
+  }).toBe(895);
+  await page.reload();
+  await expect(page.getByRole('button', { name: /reabrir ejercicio/i })).toBeVisible();
+  expect((await avisos(page).allTextContents()).join(' ')).not.toMatch(/récord.*volumen/i);
   await page.getByRole('button', { name: /reabrir ejercicio/i }).click();
   await page.getByRole('button', { name: /terminar ejercicio/i }).click();
   expect((await avisos(page).allTextContents()).join(' ')).not.toMatch(/récord.*volumen/i);
@@ -261,4 +295,50 @@ test('notifica el primer 1RM solo como referencia y muestra volumen al finalizar
   expect((await avisos(page).allTextContents()).join(' ')).not.toMatch(/récord.*1rm/i);
   await page.getByRole('button', { name: /finalizar entrenamiento/i }).click();
   await expect(avisos(page)).toContainText(/récord.*volumen/i);
+});
+
+
+test('recalcula tabla, gráfico y récords al corregir y eliminar desde historial', async ({ page }) => {
+  const ejercicio = fixture.ejercicios[0];
+  await sembrarSesiones(fixture.sesiones.filter((s) => s.ejercicioId === ejercicio.id));
+  await login(page);
+  await page.getByRole('link', { name: /progreso/i }).click();
+  await expect(page.getByRole('table').getByRole('row')).toHaveCount(5);
+  await page.getByRole('link', { name: /historial/i }).click();
+  await page.getByRole('link', { name: /ver entrenamiento del/i }).first().click();
+  await page.getByRole('button', { name: /editar serie 1/i }).first().click();
+  await page.getByLabel(/peso/i).last().fill('90');
+  await page.getByRole('button', { name: /guardar cambios/i }).click();
+  await expect(page.getByRole('status')).toHaveText('Cambios de la serie guardados.');
+  await page.getByRole('link', { name: /progreso/i }).click();
+  const records = page.getByRole('region', { name: /récords personales/i });
+  await expect(records).toContainText('90 kg');
+  await expect(records).toContainText('105 kg');
+  await expect(records).toContainText('943 kg');
+  await expect(page.getByRole('table').getByRole('row').last().getByRole('cell')).toHaveText(['90', '943', '105']);
+  await expect(page.getByRole('img', { name: /gráfico de progreso/i })).toHaveAccessibleName(/4 sesiones/);
+  await page.getByRole('link', { name: /historial/i }).click();
+  await page.getByRole('link', { name: /ver entrenamiento del/i }).first().click();
+  await page.getByRole('button', { name: 'Eliminar entrenamiento', exact: true }).click();
+  await page.getByRole('dialog').getByRole('button', { name: /eliminar entrenamiento/i }).click();
+  await expect(page).toHaveURL(/\/historial$/);
+  await page.getByRole('link', { name: /progreso/i }).click();
+  await expect(page.getByRole('table').getByRole('row')).toHaveCount(4);
+  await expect(records).toContainText('75 kg');
+  await expect(records).toContainText('87,5 kg');
+  await expect(records).toContainText('855 kg');
+  await expect(records).not.toContainText('90 kg');
+  await expect(page.getByRole('img', { name: /gráfico de progreso/i })).toHaveAccessibleName(/3 sesiones/);
+});
+
+
+test('muestra cero, ausencia de 1RM y tendencia insuficiente con una sola sesión', async ({ page }) => {
+  const sesion = fixture.sesiones.find((s) => s.ejercicioId === fixture.ejercicios[1].id);
+  if (!sesion) throw new Error('Falta el fixture de dominadas.');
+  await sembrarSesiones([sesion]);
+  await login(page);
+  await page.getByRole('link', { name: /progreso/i }).click();
+  await expect(page.getByRole('table').getByRole('row').last().getByRole('cell')).toHaveText(['0', '0', 'Sin 1RM']);
+  await expect(page.getByText(/con una sola sesión aún no hay tendencia/i)).toBeVisible();
+  expect((await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21aa']).analyze()).violations).toEqual([]);
 });

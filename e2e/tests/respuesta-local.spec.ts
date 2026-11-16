@@ -67,9 +67,14 @@ test('confirma una serie y mide su respuesta visual local sin esperar la API', a
   });
   await page.getByRole('button', { name: /añadir serie|guardar serie|registrar serie/i }).last().click();
   await expect(page.getByRole('button', { name: /editar serie 1/i })).toBeVisible();
-  const milisegundos = await page.evaluate(() =>
-    (window as Window & { __respuestaLocalMs?: number }).__respuestaLocalMs
+  // La serie puede estar visible antes de que el siguiente frame registre la medición.
+  const medicion = await page.waitForFunction(() =>
+    (window as Window & { __respuestaLocalMs?: number }).__respuestaLocalMs ?? null,
+    undefined,
+    { timeout: 3000, polling: 20 },
   );
+  const milisegundos = await medicion.jsonValue();
+  await medicion.dispose();
 
   if (typeof milisegundos !== 'number') throw new Error('No se observó el render local tras confirmar la serie.');
   expect(milisegundos).toBeLessThan(100);
