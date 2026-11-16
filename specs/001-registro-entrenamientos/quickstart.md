@@ -52,11 +52,13 @@ El cliente usa `/api` en el mismo origen; Vite lo reenvía por HTTPS al backend 
 comprueba su certificado con la CA. No hace falta CORS para este flujo.
 Si faltan certificados, el arranque falla; no existe alternativa HTTP.
 
-`npm run test:e2e` inicia y cierra ambos servidores con `NODE_ENV=test`, sin reutilizar
-servidores de desarrollo. Usa Chrome estable instalado, viewport 360×800 y
-certificados comprobados (`ignoreHTTPSErrors: false`). El proceso Node recibe la
+`npm run test:e2e` construye el frontend y sirve el build de producción por HTTPS junto
+con la API en `NODE_ENV=test`, sin reutilizar servidores de desarrollo. Así el service
+worker está activo en las pruebas offline. Usa Chrome estable instalado, viewport
+360×800 y certificados comprobados (`ignoreHTTPSErrors: false`). El proceso Node recibe la
 CA **pública** mediante `NODE_EXTRA_CA_CERTS`; Supertest también usa HTTPS y CA explícita.
-Los tests acceden solo a `gymtrack_test`, con fixtures en esquema aislado. Los puertos
+Los tests acceden solo a `gymtrack_test`; las factorías que usan `public` limpian
+únicamente sus fixtures y las pruebas REST aisladas crean su propio esquema. Los puertos
 3000/5173 deben estar libres antes de ejecutar E2E. Captura: `test-results/e2e/`.
 
 Para la entrega, servir `frontend/dist` en un hosting HTTPS y conservar `/api` en el
@@ -80,6 +82,11 @@ npm run test:e2e          # flujos críticos + axe en viewport 360×800 (Playwri
 npm run lint && npm run typecheck
 npm run perf              # Lighthouse 5 veces sobre el build de producción (entorno de la constitución)
 ```
+
+`npm run perf` construye y sirve el build de producción por HTTPS, aplica el perfil de
+Chrome estable a 360×800, CPU 4× y red 10/5 Mbps con 100 ms, y mide cinco cargas frías
+además de la respuesta visual local al confirmar una serie. Los informes detallados quedan
+en `test-results/perf/`.
 
 Puerta de integración (constitución): todo lo anterior en verde antes de fusionar un pull request.
 
