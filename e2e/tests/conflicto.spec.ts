@@ -37,15 +37,42 @@ async function iniciarEntrenamiento(page: Page) {
 }
 
 async function agregarSerie(page: Page, peso: number) {
+  const tarjeta = page.getByRole('heading', { name: 'Press de banca', exact: true })
+    .locator('xpath=ancestor::article[1]');
+  const numero = (await tarjeta.getByRole('button', { name: /editar serie/i }).count()) + 1;
   await page.getByLabel(/repeticiones/i).last().fill('8');
   await page.getByLabel(/peso/i).last().fill(String(peso));
   await page.getByRole('button', { name: /añadir serie|guardar serie|registrar serie/i }).last().click();
+  await expect(tarjeta.getByRole('button', { name: new RegExp(`editar serie ${numero}`, 'i') })).toBeVisible();
 }
 
 async function editarPrimeraSerie(page: Page, peso: number) {
   await page.getByRole('button', { name: /editar serie 1/i }).click();
   await page.getByLabel(/peso/i).last().fill(String(peso));
   await page.getByRole('button', { name: /guardar cambios/i }).click();
+}
+
+async function esperarSeries(esperadas: Array<{ orden: number; pesoKg: number; repeticiones: number }>) {
+  await expect.poll(async () => {
+    const filas = await source.query<Array<{ orden: number; peso_kg: string; repeticiones: number }>>(
+      `SELECT s.orden, s.peso_kg, s.repeticiones
+         FROM serie s
+         JOIN ejercicio_realizado er ON er.id = s.ejercicio_realizado_id
+         JOIN entrenamiento e ON e.id = er.entrenamiento_id
+         JOIN usuario u ON u.id = e.usuario_id
+        WHERE u.email = $1
+        ORDER BY s.orden`,
+      [fixture.email]
+    );
+    return filas.map(({ orden, peso_kg, repeticiones }) => ({
+      orden, pesoKg: Number(peso_kg), repeticiones
+    }));
+  }).toEqual(esperadas);
+}
+
+async function eliminarPrimeraSerie(page: Page) {
+  await page.getByRole('button', { name: /eliminar serie 1/i }).click();
+  await expect(page.getByText(/serie 1 eliminada/i)).toBeVisible();
 }
 
 async function crearSegundoDispositivo(browser: Browser) {
@@ -85,24 +112,29 @@ test('conserva series nuevas de ambos dispositivos y resuelve un cambio offline 
     await expect(paginaB.getByRole('button', { name: /editar serie 1/i })).toBeVisible();
 
     await agregarSerie(page, 80);
+    await paginaB.reload();
+    await expect(paginaB.getByRole('button', { name: /editar serie 2/i })).toBeVisible();
     await agregarSerie(paginaB, 90);
-
-    const antesDelCambio = await source.query<Array<{ total: number }>>(
-      `SELECT count(*)::int AS total
-         FROM serie s
-         JOIN ejercicio_realizado er ON er.id = s.ejercicio_realizado_id
-         JOIN entrenamiento e ON e.id = er.entrenamiento_id
-         JOIN usuario u ON u.id = e.usuario_id
-        WHERE u.email = $1`,
-      [fixture.email]
-    );
-    expect(antesDelCambio[0].total).toBe(3);
+    await esperarSeries([
+      { orden: 1, pesoKg: 60, repeticiones: 8 },
+      { orden: 2, pesoKg: 80, repeticiones: 8 },
+      { orden: 3, pesoKg: 90, repeticiones: 8 }
+    ]);
+    await page.reload();
+    await paginaB.reload();
+    await expect(page.getByRole('button', { name: /editar serie 3/i })).toBeVisible();
+    await expect(paginaB.getByRole('button', { name: /editar serie 3/i })).toBeVisible();
 
     await segundoDispositivo.setOffline(true);
     await editarPrimeraSerie(paginaB, 70);
     await expect(paginaB.getByText(/1 cambio pendiente de sincronizar/i)).toBeVisible();
 
     await editarPrimeraSerie(page, 65);
+    await esperarSeries([
+      { orden: 1, pesoKg: 65, repeticiones: 8 },
+      { orden: 2, pesoKg: 80, repeticiones: 8 },
+      { orden: 3, pesoKg: 90, repeticiones: 8 }
+    ]);
     await segundoDispositivo.setOffline(false);
     const conflicto = paginaB.getByRole('alert');
     await expect(conflicto).toContainText('65');
@@ -110,24 +142,94 @@ test('conserva series nuevas de ambos dispositivos y resuelve un cambio offline 
     await conflicto.getByRole('button', { name: /repetir mi cambio/i }).click();
     await expect(paginaB.getByText(/0 cambios pendientes de sincronizar/i)).toBeVisible();
 
-    const filas = await source.query<Array<{ orden: number; peso_kg: string; repeticiones: number }>>(
-      `SELECT s.orden, s.peso_kg, s.repeticiones
-         FROM serie s
-         JOIN ejercicio_realizado er ON er.id = s.ejercicio_realizado_id
-         JOIN entrenamiento e ON e.id = er.entrenamiento_id
-         JOIN usuario u ON u.id = e.usuario_id
-        WHERE u.email = $1
-        ORDER BY s.orden`,
-      [fixture.email]
-    );
-    expect(filas).toHaveLength(3);
-    expect(filas.map(({ orden, peso_kg, repeticiones }) => ({
-      orden, pesoKg: Number(peso_kg), repeticiones
-    }))).toEqual([
+    await esperarSeries([
       { orden: 1, pesoKg: 70, repeticiones: 8 },
       { orden: 2, pesoKg: 80, repeticiones: 8 },
       { orden: 3, pesoKg: 90, repeticiones: 8 }
     ]);
+  } finally {
+    await segundoDispositivo.close();
+  }
+});
+
+test('resuelve un conflicto de edición online solo después de mostrar la versión vigente', async ({ page, browser }) => {
+  await registrarCuenta(page);
+  await iniciarEntrenamiento(page);
+  await agregarSerie(page, 60);
+
+  const segundoDispositivo = await crearSegundoDispositivo(browser);
+  try {
+    const paginaB = await segundoDispositivo.newPage();
+    await iniciarSesion(paginaB);
+    await editarPrimeraSerie(page, 65);
+    await esperarSeries([{ orden: 1, pesoKg: 65, repeticiones: 8 }]);
+    await editarPrimeraSerie(paginaB, 70);
+
+    const conflicto = paginaB.getByRole('alert');
+    await expect(conflicto).toContainText('65');
+    await expect(conflicto).toContainText(/conflicto/i);
+    await conflicto.getByRole('button', { name: /repetir mi cambio/i }).click();
+    await expect(paginaB.getByText(/0 cambios pendientes de sincronizar/i)).toBeVisible();
+
+    await esperarSeries([{ orden: 1, pesoKg: 70, repeticiones: 8 }]);
+  } finally {
+    await segundoDispositivo.close();
+  }
+});
+
+test('resuelve una eliminación online en conflicto con una edición reciente', async ({ page, browser }) => {
+  test.setTimeout(60_000);
+  await registrarCuenta(page);
+  await iniciarEntrenamiento(page);
+  await agregarSerie(page, 60);
+
+  const segundoDispositivo = await crearSegundoDispositivo(browser);
+  try {
+    const paginaB = await segundoDispositivo.newPage();
+    await iniciarSesion(paginaB);
+    await editarPrimeraSerie(page, 65);
+    await esperarSeries([{ orden: 1, pesoKg: 65, repeticiones: 8 }]);
+    await eliminarPrimeraSerie(paginaB);
+
+    const conflicto = paginaB.getByRole('alert');
+    await expect(conflicto).toContainText('65', { timeout: 10000 });
+    await expect(conflicto).toContainText(/conflicto/i);
+    await conflicto.getByRole('button', { name: /repetir mi cambio/i }).click();
+    await expect(paginaB.getByText(/0 cambios pendientes de sincronizar/i)).toBeVisible();
+
+    await esperarSeries([]);
+  } finally {
+    await segundoDispositivo.close();
+  }
+});
+
+test('al reconectar, una eliminación offline en conflicto conserva la serie vigente si se descarta', async ({ page, browser }) => {
+  test.setTimeout(60_000);
+  await registrarCuenta(page);
+  await iniciarEntrenamiento(page);
+  await agregarSerie(page, 60);
+
+  const segundoDispositivo = await crearSegundoDispositivo(browser);
+  try {
+    const paginaB = await segundoDispositivo.newPage();
+    await iniciarSesion(paginaB);
+    await segundoDispositivo.setOffline(true);
+    await editarPrimeraSerie(page, 65);
+    await esperarSeries([{ orden: 1, pesoKg: 65, repeticiones: 8 }]);
+    await eliminarPrimeraSerie(paginaB);
+    await expect(paginaB.getByText(/serie 1 eliminada/i)).toBeVisible();
+
+    await paginaB.waitForTimeout(6200);
+    await expect(paginaB.getByText(/1 cambio pendiente de sincronizar/i)).toBeVisible();
+    await segundoDispositivo.setOffline(false);
+    const conflicto = paginaB.getByRole('alert');
+    await expect(conflicto).toContainText('65');
+    await expect(conflicto).toContainText(/conflicto/i);
+    await conflicto.getByRole('button', { name: /descartar mi cambio/i }).click();
+    await expect(paginaB.getByText(/0 cambios pendientes de sincronizar/i)).toBeVisible();
+    await expect(paginaB.getByText('65 kg × 8', { exact: true })).toBeVisible();
+
+    await esperarSeries([{ orden: 1, pesoKg: 65, repeticiones: 8 }]);
   } finally {
     await segundoDispositivo.close();
   }

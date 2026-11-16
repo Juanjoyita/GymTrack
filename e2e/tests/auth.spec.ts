@@ -86,9 +86,15 @@ test('login de cuenta existente conserva sesión al recargar', async ({ page }) 
 
 test('logout desde cuenta elimina sesión y bloquea el regreso a entrenar', async ({ page }) => {
   await rellenarLogin(page, fixture.email);
+  await expect(page.getByRole('heading', { name: /^entrenar$/i })).toBeVisible();
   await comprobarSesion(page, fixture.email);
   await page.getByRole('link', { name: /^cuenta$/i }).click();
+  const respuestaLogout = page.waitForResponse((response) =>
+    response.url().endsWith('/api/auth/logout') && response.request().method() === 'POST'
+  );
   await page.getByRole('button', { name: /^cerrar sesión$/i }).click();
+  expect((await respuestaLogout).status()).toBe(204);
+  await expect(page.getByRole('heading', { name: /^iniciar sesión$/i })).toBeVisible();
   expect((await page.request.get('/api/auth/yo')).status()).toBe(401);
   expect((await page.context().cookies()).some(({ name }) => name === 'gt_sesion')).toBe(false);
   await page.goto('/');
@@ -97,6 +103,7 @@ test('logout desde cuenta elimina sesión y bloquea el regreso a entrenar', asyn
 
 test('otra sesión de navegador accede a la misma cuenta sin compartir almacenamiento', async ({ page, browser }) => {
   await rellenarLogin(page, fixture.email);
+  await expect(page.getByRole('heading', { name: /^entrenar$/i })).toBeVisible();
   await comprobarSesion(page, fixture.email);
   const segundo = await browser.newContext({
     baseURL: 'https://localhost:5173', viewport: { width: 360, height: 800 },
@@ -107,6 +114,7 @@ test('otra sesión de navegador accede a la misma cuenta sin compartir almacenam
     expect((await segundo.cookies()).some(({ name }) => name === 'gt_sesion')).toBe(false);
     const otraPagina = await segundo.newPage();
     await rellenarLogin(otraPagina, fixture.email);
+    await expect(otraPagina.getByRole('heading', { name: /^entrenar$/i })).toBeVisible();
     await comprobarSesion(otraPagina, fixture.email);
     await page.getByRole('link', { name: /^cuenta$/i }).click();
     await page.getByRole('button', { name: /^cerrar sesión$/i }).click();

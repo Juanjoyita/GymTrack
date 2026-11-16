@@ -51,18 +51,20 @@ export default defineConfig(({ command, mode }) => {
     key: readFileSync(resolve(root, env.TLS_KEY_PATH || resolve(directory, 'localhost-key.pem'))),
     minVersion: 'TLSv1.2' as const,
   };
+  const proxy = {
+    '/api': {
+      target: 'https://localhost:3000',
+      secure: true,
+      agent: new Agent({ ca: readFileSync(resolve(root, env.TLS_CA_PATH || resolve(directory, 'ca.pem'))) }),
+    },
+  };
   return {
     plugins: [react(), tailwindcss()],
     resolve: resolveDominio,
     server: {
       host: 'localhost', port: 5173, strictPort: true, https,
-      proxy: {
-        '/api': {
-          target: 'https://localhost:3000', secure: true,
-          agent: new Agent({ ca: readFileSync(resolve(root, env.TLS_CA_PATH || resolve(directory, 'ca.pem'))) }),
-        },
-      },
+      proxy,
     },
-    preview: { host: 'localhost', port: 5173, strictPort: true, https },
+    preview: { host: 'localhost', port: 5173, strictPort: true, https, proxy },
   };
 });
