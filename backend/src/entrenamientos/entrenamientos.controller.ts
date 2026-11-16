@@ -6,6 +6,7 @@ import type { SerieRow } from '../database/entities/serie';
 import { SesionesService } from './sesiones.service';
 import { EjerciciosRealizadosService } from './ejercicios-realizados.service';
 import { SeriesService } from './series.service';
+import { HistorialService } from './historial.service';
 import { PresentacionEntrenamientos, serieDto } from './presentacion';
 import { entero, fecha, invalido, nota, objeto, peso, uuid, versionQuery } from './entradas';
 
@@ -15,7 +16,8 @@ const usuario = (req: PeticionAutenticada) => { if (!req.usuario) throw noAutent
 @Controller('entrenamientos')
 export class EntrenamientosController {
   constructor(private readonly sesiones: SesionesService, private readonly realizados: EjerciciosRealizadosService,
-    private readonly series: SeriesService, private readonly presentacion: PresentacionEntrenamientos) {}
+    private readonly series: SeriesService, private readonly presentacion: PresentacionEntrenamientos,
+    private readonly historial: HistorialService) {}
 
   private async conflicto<T>(action: () => Promise<T>, map: (actual: unknown) => unknown | Promise<unknown>) {
     try { return await action(); }
@@ -56,6 +58,17 @@ export class EntrenamientosController {
     const user = usuario(req), row = await this.sesiones.recuperar(user);
     if (!row) { response.status(204); return; }
     return this.presentacion.entrenamiento(user, row.id);
+  }
+
+  @Get()
+  listarHistorial(@Req() req: PeticionAutenticada, @Query() query: Record<string, unknown>) {
+    return this.historial.listar(usuario(req), query);
+  }
+
+  @Get(':id')
+  obtenerHistorial(@Req() req: PeticionAutenticada, @Param('id') id: string) {
+    uuid(id);
+    return this.historial.obtener(usuario(req), id);
   }
 
   @Patch(':id')

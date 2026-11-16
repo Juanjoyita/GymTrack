@@ -15,20 +15,11 @@ export default defineConfig({
     ignoreHTTPSErrors: false,
     screenshot: 'only-on-failure',
   },
-  webServer: [
-    {
-      command: 'npm run dev --workspace @gymtrack/backend', cwd: resolve(__dirname, '..'),
-      port: 3000, reuseExistingServer: false, timeout: 60000,
-      env: { NODE_ENV: 'test' },
-      gracefulShutdown: { signal: 'SIGTERM', timeout: 5000 },
-    },
-    {
-      command: 'node ../node_modules/vite/bin/vite.js preview --host localhost --port 5173 --strictPort',
-      cwd: resolve(__dirname, '../frontend'),
-      url: 'https://localhost:5173', ignoreHTTPSErrors: false,
-      reuseExistingServer: false, timeout: 60000,
-      env: { NODE_ENV: 'test' },
-      gracefulShutdown: { signal: 'SIGTERM', timeout: 5000 },
-    },
-  ],
+  webServer: {
+    command: 'node scripts/e2e-servers.mjs', cwd: resolve(__dirname, '..'),
+    url: 'https://localhost:5173', ignoreHTTPSErrors: false,
+    reuseExistingServer: false, timeout: 60000,
+    env: { NODE_ENV: 'test' },
+    gracefulShutdown: { signal: 'SIGTERM', timeout: 5000 },
+  },
 });

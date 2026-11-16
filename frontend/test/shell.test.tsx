@@ -11,9 +11,13 @@ const USUARIO = { id: '00000000-0000-4000-8000-000000000101', email: 't010@examp
 
 // Desde T025, Entrenar consulta el entrenamiento en curso: aquí no hay ninguno (204).
 beforeEach(() => {
-  vi.stubGlobal('fetch', vi.fn(async (entrada: RequestInfo | URL) => (String(entrada).endsWith('/auth/yo')
-    ? new Response(JSON.stringify(USUARIO), { status: 200, headers: { 'Content-Type': 'application/json' } })
-    : new Response(null, { status: 204 }))));
+  vi.stubGlobal('fetch', vi.fn(async (entrada: RequestInfo | URL) => {
+    const ruta = new URL(String(entrada), 'https://localhost').pathname.replace(/^\/api/, '');
+    if (ruta === '/auth/yo') return new Response(JSON.stringify(USUARIO), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    if (ruta === '/entrenamientos') return new Response(JSON.stringify({ elementos: [], siguienteCursor: null }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    if (ruta === '/ejercicios') return new Response('[]', { status: 200, headers: { 'Content-Type': 'application/json' } });
+    return new Response(null, { status: 204 });
+  }));
 });
 afterEach(() => { vi.unstubAllGlobals(); });
 
@@ -36,9 +40,8 @@ const SECCIONES = [
   { ruta: '/cuenta', nombre: textos.navegacion.cuenta },
 ];
 
-// Secciones que aún son marcadores «Próximamente». Entrenar dejó de serlo en T025.
+// Secciones que aún son marcadores «Próximamente».
 const RUTA_POR_SECCION = {
-  historial: '/historial',
   progreso: '/progreso',
   rutinas: '/rutinas',
   cuenta: '/cuenta',
@@ -71,18 +74,19 @@ describe('shell móvil', () => {
   it.each(SECCIONES)('muestra la sección $nombre en $ruta y la marca como actual', async ({ ruta, nombre }) => {
     await renderizarEn(ruta);
 
-    expect(screen.getByRole('heading', { level: 1, name: nombre })).toBeInTheDocument();
+    const titulo = ruta === '/historial' ? textos.historial.titulo : nombre;
+    expect(screen.getByRole('heading', { level: 1, name: titulo })).toBeInTheDocument();
     const navegacion = screen.getByRole('navigation', { name: textos.navegacion.etiqueta });
     expect(within(navegacion).getByRole('link', { name: nombre })).toHaveAttribute('aria-current', 'page');
-    expect(document.title).toBe(`${nombre} · ${textos.app.nombre}`);
+    expect(document.title).toBe(`${titulo} · ${textos.app.nombre}`);
   });
 
-  it('indica con texto que la sección aún no está disponible, sin implementar sus flujos', async () => {
+  it('muestra el estado vacío y el acceso al registro pasado del historial', async () => {
     await renderizarEn('/historial');
 
-    expect(screen.getByText(textos.shell.proximamente)).toBeInTheDocument();
-    expect(screen.queryByRole('form')).not.toBeInTheDocument();
-    expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
+    expect(await screen.findByText(textos.historial.sinResultados)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: textos.historial.registrarPasado })).toHaveAttribute('href', '/?registrarPasado=1');
+    expect(screen.queryByText(textos.shell.proximamente)).not.toBeInTheDocument();
   });
 
   it.each(Object.entries(RUTA_POR_SECCION))('describe el propósito de %s y lo que incluirá', async (clave, ruta) => {
