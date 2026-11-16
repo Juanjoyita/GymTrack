@@ -122,7 +122,7 @@ Una prueba de aceptación debe ejecutarse y fallar por el comportamiento ausente
 
 ### Preparación de infraestructura de pruebas
 
-- [ ] T043A Preparar Mailpit en `docker-compose.yml`, variables SMTP en `.env.example` y fixture SMTP en `backend/test/utils/correo.ts` — I1; depende: T043; comprobar: prueba de infraestructura envía un correo sintético y lo recupera de Mailpit; panel/API de pruebas mediante HTTPS con certificado local, sin implementar recuperación ni servicio de correo de aplicación.
+- [X] T043A Preparar Mailpit en `docker-compose.yml`, variables SMTP en `.env.example` y fixture SMTP en `backend/test/utils/correo.ts` — I1; depende: T043; comprobar: prueba de infraestructura envía un correo sintético y lo recupera de Mailpit; panel/API de pruebas mediante HTTPS con certificado local, sin implementar recuperación ni servicio de correo de aplicación.
 
 ### Aceptación primero
 

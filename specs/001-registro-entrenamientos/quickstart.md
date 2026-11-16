@@ -71,6 +71,33 @@ desactiva la validación TLS. Esta tarea documenta la configuración; no desplie
 entorno remoto. Mailpit HTTPS se integra en T043A; cookies Secure se verifican tras
 autenticación en T023/T029.
 
+## Mailpit y SMTP de pruebas (T043A)
+
+Después de `npm run tls:local`, inicia `docker compose up -d mailpit`.
+Mailpit captura SMTP en `localhost:1025` y ofrece panel y API en
+`https://localhost:8025`. Ambos puertos se publican solo en loopback. El panel usa el
+certificado local montado en solo lectura; no se desactiva la validación TLS.
+SMTP local no requiere credenciales ni STARTTLS, conforme al transporte interno
+previsto en el plan; no hay relay ni envío a proveedores externos.
+
+Las variables opcionales están en `.env.example`: `SMTP_HOST`, `SMTP_PORT`,
+`SMTP_FROM`, `MAILPIT_PORT` y `MAILPIT_URL`. Si se cambia el puerto del panel, ajustar
+la URL; si se cambia SMTP_PORT, usarlo también en el cliente SMTP del host.
+`GYMTRACK_TLS_DIR` o `TLS_CERT_PATH`/`TLS_KEY_PATH` permiten montar certificados
+alternativos existentes. Genera los certificados antes de arrancar Compose.
+
+Verifica el envío y la lectura por API y panel HTTPS con Chrome instalado:
+
+```bash
+npm run test --workspace backend -- --runTestsByPath test/infraestructura/correo.e2e-spec.ts
+```
+
+La prueba usa direcciones `example.invalid`, un destinatario único y elimina solo
+su propio mensaje al terminar. Guarda una captura local en
+`test-results/mailpit/correo-sintetico-https.png`. El fixture SMTP está en
+`backend/test/utils/correo.ts` y solo se ejecuta con `NODE_ENV=test` y destinos locales.
+No requiere base de datos ni implementa el servicio de correo de la aplicación.
+
 ## Ejecutar las pruebas
 
 ```bash
