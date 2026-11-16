@@ -89,3 +89,9 @@ export async function eliminarCorreo(id: string) {
 }
 
 export const leerPanel = () => consultar('/');
+
+// Consulta exacta por destinatario UUID para aceptación US4 y limpieza individual.
+export async function listarCorreos(destinatario: string): Promise<{ ID: string }[]> {
+  const listado = JSON.parse(await consultar(`/api/v1/search?query=${encodeURIComponent(`to:${destinatario}`)}`)) as { messages: { ID: string }[] };
+  return listado.messages;
+}

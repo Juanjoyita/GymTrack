@@ -126,7 +126,7 @@ Una prueba de aceptación debe ejecutarse y fallar por el comportamiento ausente
 
 ### Aceptación primero
 
-- [ ] T044 [US4] Escribir aceptación roja en `backend/test/integracion/cuenta.e2e-spec.ts` y `e2e/tests/cuenta.spec.ts` — I4; depende: T043A; comprobar: rojo para kg↔lb sin mutación de BD, exportación completa JSON/CSV sin secretos, eliminación total y recuperación con respuesta indistinguible, token de 1 h y un solo uso.
+- [X] T044 [US4] Escribir aceptación roja en `backend/test/integracion/cuenta.e2e-spec.ts` y `e2e/tests/cuenta.spec.ts` — I4; depende: T043A; comprobar: rojo para kg↔lb sin mutación de BD, exportación completa JSON/CSV sin secretos, eliminación total y recuperación con respuesta indistinguible, token de 1 h y un solo uso.
 
 ### Implementación
 
