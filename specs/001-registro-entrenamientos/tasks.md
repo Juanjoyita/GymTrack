@@ -102,12 +102,12 @@ Una prueba de aceptación debe ejecutarse y fallar por el comportamiento ausente
 ### Aceptación primero
 
 - [X] T036 [US3] Crear fixture manual y aceptación roja en `packages/domain/test/fixtures/progreso-referencia.json`, `backend/test/integracion/progreso.e2e-spec.ts` y `e2e/tests/progreso.spec.ts` — I4; depende: T035; comprobar: rojo para periodos, tabla/gráfico, récords y todos los casos V9, incluidos primera métrica sin referencia, reabrir/terminar y finalización global.
-- [ ] T037 [US3] Escribir unitarios rojos en `packages/domain/test/{metricas-progreso,records}.test.ts` — I2; depende: T036; comprobar: Epley 1/2/12/13 repeticiones, peso 0, `null` sin series válidas, agregación del ejercicio repetido en la sesión, empates con primera fecha y recálculo tras editar/eliminar.
+- [X] T037 [US3] Escribir unitarios rojos en `packages/domain/test/{metricas-progreso,records}.test.ts` — I2; depende: T036; comprobar: Epley 1/2/12/13 repeticiones, peso 0, `null` sin series válidas, agregación del ejercicio repetido en la sesión, empates con primera fecha y recálculo tras editar/eliminar.
 
 ### Implementación
 
-- [ ] T038 [US3] Implementar métricas y detección de récords en `packages/domain/src/metricas.ts` y `records.ts` — I2; depende: T037; comprobar: T037 verde y coincidencia 100 % con fixture; sin aviso en primera sesión/primera métrica válida ni empates.
-- [ ] T039 [US3] Implementar API de progreso y récords en `backend/src/progreso/` y registrarla en `backend/src/app.module.ts` — I2; depende: T038; comprobar: periodos 1m/3m/1a/todo, solo sesiones finalizadas propias, exclusión de entrenamiento actual y récords derivados que cambian al corregir/eliminar datos.
+- [X] T038 [US3] Implementar métricas y detección de récords en `packages/domain/src/metricas.ts` y `records.ts` — I2; depende: T037; comprobar: T037 verde y coincidencia 100 % con fixture; sin aviso en primera sesión/primera métrica válida ni empates.
+- [X] T039 [US3] Implementar API de progreso y récords en `backend/src/progreso/` y registrarla en `backend/src/app.module.ts` — I2; depende: T038; comprobar: periodos 1m/3m/1a/todo, solo sesiones finalizadas propias, exclusión de entrenamiento actual y récords derivados que cambian al corregir/eliminar datos.
 - [ ] T040 [US3] Implementar gráfico, tabla equivalente y récords en `frontend/src/paginas/progreso/` — I3; depende: T039; comprobar: mismos datos en Recharts y tabla, filtro temporal, una sesión con aviso de tendencia insuficiente, estados sin datos y distinción adicional al color.
 - [ ] T041 [US3] Implementar avisos durante el registro en `frontend/src/paginas/entrenamiento/` — I3; depende: T040; comprobar: peso/1RM tras cada serie; volumen solo al terminar ejercicio o finalizar sesión; reabrir no repite aviso salvo superar máximo ya notificado, persistido según contrato; región aria-live polite sin mover foco.
 - [ ] T042 [US3] Integrar rutas, cliente y textos en `frontend/src/app/`, `frontend/src/api/progreso.ts` y `frontend/src/textos/es.ts` — I3; depende: T041; comprobar: invalidación tras cambios de historial y avisos integrada sin añadir interacciones al registro de serie.

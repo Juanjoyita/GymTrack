@@ -1,5 +1,6 @@
 export * from './unidades';
 export * from './metricas';
+export * from './records';
 export * from './normalizar';
 export * from './validacion/auth';
 export * from './validacion/serie';
