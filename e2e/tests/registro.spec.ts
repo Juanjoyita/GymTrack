@@ -1,3 +1,4 @@
+import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page } from '@playwright/test';
 import { randomUUID } from 'node:crypto';
 import type { DataSource } from 'typeorm';
@@ -24,6 +25,14 @@ async function registrarCuenta(page: Page) {
   await expect(page.getByRole('heading', { name: /^entrenar$/i })).toBeVisible();
 }
 
+async function iniciarSesion(page: Page) {
+  await page.goto('/login');
+  await page.getByLabel(/correo electrónico|email/i).fill(fixture.email);
+  await page.getByLabel(/^contraseña$/i).fill(fixture.contrasena);
+  await page.getByRole('button', { name: /^iniciar sesión$|^entrar$/i }).click();
+  await expect(page.getByRole('heading', { name: /^entrenar$/i })).toBeVisible();
+}
+
 async function iniciarEntrenamiento(page: Page) {
   await page.getByRole('button', { name: /iniciar entrenamiento/i }).click();
   await expect(page.getByRole('heading', { name: /entrenamiento en curso/i })).toBeVisible();
@@ -33,11 +42,14 @@ async function anadirEjercicio(page: Page, nombre: string) {
   await page.getByRole('button', { name: /añadir ejercicio/i }).click();
   const dialogo = page.getByRole('dialog');
   await dialogo.getByLabel(/buscar ejercicio/i).fill(nombre);
-  await dialogo.getByRole('button', { name: new RegExp(nombre, 'i') }).click();
+  await dialogo.getByRole('button', { name: nombre, exact: true }).click();
   await expect(page.getByRole('heading', { name: nombre, exact: true })).toBeVisible();
 }
 
 async function agregarSerie(page: Page, peso: number, repeticiones: number) {
+  const tarjeta = page.getByLabel(/peso/i).last().locator('xpath=ancestor::article[1]');
+  const numero = (await tarjeta.getByRole('button', { name: /editar serie/i }).count()) + 1;
+  const inicio = Date.now();
   let interacciones = 0;
   await page.getByLabel(/repeticiones/i).last().fill(String(repeticiones));
   interacciones += 1;
@@ -46,15 +58,22 @@ async function agregarSerie(page: Page, peso: number, repeticiones: number) {
   await page.getByRole('button', { name: /añadir serie|guardar serie|registrar serie/i }).last().click();
   interacciones += 1;
   expect(interacciones).toBeLessThanOrEqual(3);
+  await expect(tarjeta.getByRole('button', { name: new RegExp(`editar serie ${numero}`, 'i') })).toBeVisible();
+  expect(Date.now() - inicio).toBeLessThan(5000);
 }
 
 async function agregarSeriePrellenada(page: Page, peso: number, repeticiones: number) {
+  const tarjeta = page.getByLabel(/peso/i).last().locator('xpath=ancestor::article[1]');
+  const numero = (await tarjeta.getByRole('button', { name: /editar serie/i }).count()) + 1;
+  const inicio = Date.now();
   await expect(page.getByLabel(/repeticiones/i).last()).toHaveValue(String(repeticiones));
   await expect(page.getByLabel(/peso/i).last()).toHaveValue(String(peso));
   let interacciones = 0;
   await page.getByRole('button', { name: /añadir serie|guardar serie|registrar serie/i }).last().click();
   interacciones += 1;
   expect(interacciones).toBeLessThanOrEqual(3);
+  await expect(tarjeta.getByRole('button', { name: new RegExp(`editar serie ${numero}`, 'i') })).toBeVisible();
+  expect(Date.now() - inicio).toBeLessThan(5000);
 }
 
 test.beforeAll(async () => {
@@ -75,7 +94,8 @@ test.afterAll(async () => {
 
 test('registra dos ejercicios, edita y deshace una eliminación, y conserva el resumen exacto', async ({ page }) => {
   await registrarCuenta(page);
-  const inicioSolicitado = Date.now();
+  const inicioFlujo = Date.now();
+  const inicioSolicitado = inicioFlujo;
   await iniciarEntrenamiento(page);
   await anadirEjercicio(page, fixture.ejercicios[0].nombre);
 
@@ -103,6 +123,9 @@ test('registra dos ejercicios, edita y deshace una eliminación, y conserva el r
   await expect(page.getByText(/2 ejercicios/i)).toBeVisible();
   await expect(page.getByText(/5 series/i)).toBeVisible();
   await expect(page.getByText(/2460/)).toBeVisible();
+  const duracionFlujo = Date.now() - inicioFlujo;
+  expect(duracionFlujo).toBeLessThan(120_000);
+  console.log(`V2: resumen tras ${duracionFlujo} ms; series verificadas en <=5 s y <=3 interacciones`);
 
   const filas = await source.query<Array<{
     inicio: Date | string;
@@ -146,6 +169,98 @@ test('registra dos ejercicios, edita y deshace una eliminación, y conserva el r
   expect(filas.every(({ nota_ejercicio }) => nota_ejercicio === null)).toBe(true);
 });
 
+test('prellena con la última sesión tras finalizar, cerrar sesión e iniciar de nuevo', async ({ page }) => {
+  await registrarCuenta(page);
+  await iniciarEntrenamiento(page);
+  await anadirEjercicio(page, fixture.ejercicios[0].nombre);
+  await agregarSerie(page, 62.5, 8);
+  await page.getByRole('button', { name: /finalizar entrenamiento/i }).click();
+  await expect(page.getByRole('heading', { name: /entrenamiento finalizado/i })).toBeVisible();
+  await page.getByRole('button', { name: /volver/i }).click();
+
+  await page.getByRole('link', { name: /^cuenta$/i }).click();
+  await page.getByRole('button', { name: /^cerrar sesión$/i }).click();
+  await iniciarSesion(page);
+  await iniciarEntrenamiento(page);
+  await anadirEjercicio(page, fixture.ejercicios[0].nombre);
+  await expect(page.getByLabel(/peso/i).last()).toHaveValue('62.5');
+  await expect(page.getByLabel(/repeticiones/i).last()).toHaveValue('8');
+});
+
+test('valida V4 en la interfaz y conserva un control de peso corporal de cero', async ({ page }) => {
+  await registrarCuenta(page);
+  await iniciarEntrenamiento(page);
+  await anadirEjercicio(page, fixture.ejercicios[0].nombre);
+
+  const peso = page.getByLabel(/peso/i).last();
+  const repeticiones = page.getByLabel(/repeticiones/i).last();
+  await peso.fill('500.01');
+  await repeticiones.fill('1');
+  await page.getByRole('button', { name: /añadir serie|guardar serie|registrar serie/i }).last().click();
+  await expect(peso).toHaveAttribute('aria-invalid', 'true');
+  await expect(page.getByText('No puede superar 500 kg.')).toBeVisible();
+  await expect(page.getByRole('button', { name: /editar serie/i })).toHaveCount(0);
+
+  await peso.fill('0');
+  await page.getByRole('button', { name: /añadir serie|guardar serie|registrar serie/i }).last().click();
+  await expect(page.getByRole('button', { name: /editar serie 1/i })).toBeVisible();
+});
+
+test('P1 pasa axe y revisión de teclado, foco, nombres accesibles y objetivos táctiles', async ({ page }) => {
+  await registrarCuenta(page);
+  await iniciarEntrenamiento(page);
+  await anadirEjercicio(page, fixture.ejercicios[0].nombre);
+
+  const auditoria = await new AxeBuilder({ page })
+    .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
+    .analyze();
+  expect(auditoria.violations).toEqual([]);
+  await expect(page.getByRole('heading', { name: /entrenamiento en curso/i })).toBeVisible();
+  await expect(page.getByLabel(/peso/i).last()).toBeVisible();
+  await expect(page.getByLabel(/repeticiones/i).last()).toBeVisible();
+
+  const controles = await page.locator('button:visible, a[href]:visible, input:visible, textarea:visible, select:visible')
+    .evaluateAll((elementos) => elementos
+      .filter((elemento) => !elemento.classList.contains('sr-only'))
+      .map((elemento) => {
+        const rect = elemento.getBoundingClientRect();
+        return {
+          alto: rect.height,
+          ancho: rect.width,
+          nombre: elemento.getAttribute('aria-label')
+            || elemento.getAttribute('aria-labelledby')
+            || elemento.textContent?.trim()
+            || elemento.closest('label')?.textContent?.trim()
+            || (elemento.id ? document.querySelector(`label[for="${CSS.escape(elemento.id)}"]`)?.textContent?.trim() : ''),
+        };
+      }));
+  expect(controles.length).toBeGreaterThan(0);
+  expect(controles.every(({ alto, ancho }) => alto >= 44 && ancho >= 44)).toBe(true);
+  expect(controles.every(({ nombre }) => Boolean(nombre))).toBe(true);
+
+  await page.keyboard.press('Tab');
+  const foco = await page.evaluate(() => {
+    const activo = document.activeElement;
+    const estilo = activo ? getComputedStyle(activo) : null;
+    const control = activo instanceof HTMLInputElement
+      || activo instanceof HTMLTextAreaElement
+      || activo instanceof HTMLSelectElement
+      ? activo
+      : null;
+    return {
+      nombre: activo?.getAttribute('aria-label')
+        || activo?.getAttribute('aria-labelledby')
+        || activo?.textContent?.trim()
+        || Array.from(control?.labels ?? []).map((etiqueta) => etiqueta.textContent?.trim()).join(' '),
+      contorno: estilo?.outlineStyle,
+      anchoContorno: estilo?.outlineWidth,
+    };
+  });
+  expect(foco.nombre).toBeTruthy();
+  expect(foco.contorno).not.toBe('none');
+  expect(foco.anchoContorno).not.toBe('0px');
+});
+
 test('rechaza un entrenamiento vacío y no lo guarda', async ({ page }) => {
   await registrarCuenta(page);
   await iniciarEntrenamiento(page);
@@ -168,6 +283,7 @@ test('ofrece finalizar un entrenamiento inactivo y usa la hora de la última ser
   const dialogo = page.getByRole('dialog');
   await expect(dialogo).toContainText(/13 horas/i);
   await dialogo.getByRole('button', { name: /finalizar/i }).click();
+  await expect(page.getByRole('heading', { name: /entrenamiento finalizado/i })).toBeVisible();
 
   const filas = await source.query<Array<{ fin: Date | string; estado: string }>>(
     'SELECT fin, estado FROM entrenamiento WHERE id = $1',

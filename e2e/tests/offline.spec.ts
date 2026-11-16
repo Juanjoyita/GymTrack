@@ -1,4 +1,5 @@
-import { expect, test, type Page } from '@playwright/test';
+import { chromium, expect, test, type Page } from '@playwright/test';
+import { rm } from 'node:fs/promises';
 import type { DataSource } from 'typeorm';
 import {
   conectarBaseRegistro,
@@ -29,9 +30,13 @@ async function iniciarEntrenamiento(page: Page) {
 }
 
 async function agregarSerie(page: Page, repeticiones: number) {
+  const tarjeta = page.getByRole('heading', { name: 'Press de banca', exact: true })
+    .locator('xpath=ancestor::article[1]');
+  const numero = (await tarjeta.getByRole('button', { name: /editar serie/i }).count()) + 1;
   await page.getByLabel(/repeticiones/i).last().fill(String(repeticiones));
   await page.getByLabel(/peso/i).last().fill('60');
   await page.getByRole('button', { name: /añadir serie|guardar serie|registrar serie/i }).last().click();
+  await expect(tarjeta.getByRole('button', { name: new RegExp(`editar serie ${numero}`, 'i') })).toBeVisible();
 }
 
 test.beforeAll(async () => {
@@ -56,7 +61,10 @@ test('mantiene la cola ante cortes, recarga y reapertura, y sincroniza sin dupli
   await agregarSerie(page, 8);
 
   await page.reload();
-  await expect.poll(() => page.evaluate(() => Boolean(navigator.serviceWorker.controller))).toBe(true);
+  await expect.poll(
+    () => page.evaluate(() => Boolean(navigator.serviceWorker.controller)),
+    { timeout: 10000 }
+  ).toBe(true);
 
   await page.context().setOffline(true);
   await agregarSerie(page, 8);
@@ -88,4 +96,64 @@ test('mantiene la cola ante cortes, recarga y reapertura, y sincroniza sin dupli
     [fixture.email]
   );
   expect(filas[0].total).toBe(3);
+});
+
+test('recupera la cola tras reiniciar Chrome y registrar otra serie offline', async ({ page }, testInfo) => {
+  await page.close();
+  const perfil = testInfo.outputPath('perfil-chrome-p1');
+  const opciones = {
+    channel: 'chrome' as const,
+    baseURL: 'https://localhost:5173',
+    viewport: { width: 360, height: 800 },
+    timezoneId: 'America/Bogota',
+    ignoreHTTPSErrors: false,
+    serviceWorkers: 'allow' as const,
+  };
+  let contexto = await chromium.launchPersistentContext(perfil, opciones);
+  let contextoActivo = true;
+
+  try {
+    const page = await contexto.newPage();
+    await registrarCuenta(page);
+    await iniciarEntrenamiento(page);
+    await agregarSerie(page, 8);
+    await expect(page.getByText(/0 cambios pendientes de sincronizar/i)).toBeVisible();
+    await page.reload();
+    await expect.poll(
+      () => page.evaluate(() => Boolean(navigator.serviceWorker.controller)),
+      { timeout: 10000 }
+    ).toBe(true);
+
+    await contexto.setOffline(true);
+    await agregarSerie(page, 8);
+    await expect(page.getByText(/1 cambio pendiente de sincronizar/i)).toBeVisible();
+    await contexto.close();
+    contextoActivo = false;
+
+    contexto = await chromium.launchPersistentContext(perfil, opciones);
+    contextoActivo = true;
+    await contexto.setOffline(true);
+    const reabierta = await contexto.newPage();
+    await reabierta.goto('/');
+    await expect(reabierta.getByRole('heading', { name: 'Press de banca', exact: true })).toBeVisible();
+    await expect(reabierta.getByText(/1 cambio pendiente de sincronizar/i)).toBeVisible();
+    await agregarSerie(reabierta, 8);
+    await expect(reabierta.getByText(/2 cambios pendientes de sincronizar/i)).toBeVisible();
+
+    await contexto.setOffline(false);
+    await expect(reabierta.getByText(/0 cambios pendientes de sincronizar/i)).toBeVisible();
+    const filas = await source.query<Array<{ total: number }>>(
+      `SELECT count(*)::int AS total
+         FROM serie s
+         JOIN ejercicio_realizado er ON er.id = s.ejercicio_realizado_id
+         JOIN entrenamiento e ON e.id = er.entrenamiento_id
+         JOIN usuario u ON u.id = e.usuario_id
+        WHERE u.email = $1`,
+      [fixture.email]
+    );
+    expect(filas[0].total).toBe(3);
+  } finally {
+    if (contextoActivo) await contexto.close();
+    await rm(perfil, { recursive: true, force: true });
+  }
 });
