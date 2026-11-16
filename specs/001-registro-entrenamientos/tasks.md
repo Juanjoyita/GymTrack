@@ -114,7 +114,7 @@ Una prueba de aceptación debe ejecutarse y fallar por el comportamiento ausente
 
 ### Verificación integrada
 
-- [ ] T043 [US3] Ejecutar V9 y regresión V8 en `e2e/tests/{progreso,historial}.spec.ts` y `e2e/resultados/us3.md` — I4; depende: T042; comprobar: T036 verde, SC-006 al 100 %, edición/eliminación recalcula gráfico/tabla/récords, axe y revisión manual pasan; avisos funcionan con series sincronizadas sin duplicarse.
+- [X] T043 [US3] Ejecutar V9 y regresión V8 en `e2e/tests/{progreso,historial}.spec.ts` y `e2e/resultados/us3.md` — I4; depende: T042; comprobar: T036 verde, SC-006 al 100 %, edición/eliminación recalcula gráfico/tabla/récords, axe y revisión manual pasan; avisos funcionan con series sincronizadas sin duplicarse.
 
 ## Fase 6 — US4 / P4: Cuenta y datos
 
