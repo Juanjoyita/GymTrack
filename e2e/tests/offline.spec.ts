@@ -59,6 +59,7 @@ test('mantiene la cola ante cortes, recarga y reapertura, y sincroniza sin dupli
   await registrarCuenta(page);
   await iniciarEntrenamiento(page);
   await agregarSerie(page, 8);
+  await expect(page.getByText(/0 cambios pendientes de sincronizar/i)).toBeVisible();
 
   await page.reload();
   await expect.poll(

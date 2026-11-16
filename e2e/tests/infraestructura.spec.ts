@@ -45,14 +45,14 @@ test('conecta a gymtrack_test, crea dos usuarios aislados y captura el viewport 
   expect(page.viewportSize()).toEqual({ width: 360, height: 800 });
   // Navegación real: el navegador debe confiar en la CA, sin excepciones TLS.
   await page.goto('/');
-  await expect(page.getByRole('heading', { name: 'Entrenar', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Iniciar sesión', exact: true })).toBeVisible();
   expect(await page.evaluate(() => window.isSecureContext)).toBe(true);
   await expect(async () => {
     const ready = await page.request.get('https://localhost:3000/api');
     expect(ready.status()).toBe(404);
   }).toPass({ timeout: 30000 });
   const api = await page.request.get('https://localhost:3000/api');
-  expect(api.status()).toBe(404); // Aún no hay módulos de historias.
+  expect(api.status()).toBe(404);
   expect(await api.json()).toMatchObject({ codigo: 'NO_ENCONTRADO' });
   const viaProxy = await page.evaluate(async () => {
     const response = await fetch('/api', { credentials: 'include' });
