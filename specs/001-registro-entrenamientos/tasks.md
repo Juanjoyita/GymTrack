@@ -101,7 +101,7 @@ Una prueba de aceptación debe ejecutarse y fallar por el comportamiento ausente
 
 ### Aceptación primero
 
-- [ ] T036 [US3] Crear fixture manual y aceptación roja en `packages/domain/test/fixtures/progreso-referencia.json`, `backend/test/integracion/progreso.e2e-spec.ts` y `e2e/tests/progreso.spec.ts` — I4; depende: T035; comprobar: rojo para periodos, tabla/gráfico, récords y todos los casos V9, incluidos primera métrica sin referencia, reabrir/terminar y finalización global.
+- [X] T036 [US3] Crear fixture manual y aceptación roja en `packages/domain/test/fixtures/progreso-referencia.json`, `backend/test/integracion/progreso.e2e-spec.ts` y `e2e/tests/progreso.spec.ts` — I4; depende: T035; comprobar: rojo para periodos, tabla/gráfico, récords y todos los casos V9, incluidos primera métrica sin referencia, reabrir/terminar y finalización global.
 - [ ] T037 [US3] Escribir unitarios rojos en `packages/domain/test/{metricas-progreso,records}.test.ts` — I2; depende: T036; comprobar: Epley 1/2/12/13 repeticiones, peso 0, `null` sin series válidas, agregación del ejercicio repetido en la sesión, empates con primera fecha y recálculo tras editar/eliminar.
 
 ### Implementación

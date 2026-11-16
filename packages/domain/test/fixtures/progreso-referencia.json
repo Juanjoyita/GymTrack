@@ -1,0 +1,165 @@
+{
+  "fechaReferencia": "2026-11-16T12:00:00.000Z",
+  "ejercicios": [
+    {
+      "id": "10000000-0000-4000-8000-000000000036",
+      "nombre": "Press de banca",
+      "grupoMuscular": "pecho"
+    },
+    {
+      "id": "10000000-0000-4000-8000-000000000037",
+      "nombre": "Dominadas",
+      "grupoMuscular": "espalda"
+    }
+  ],
+  "sesiones": [
+    {
+      "id": "20000000-0000-4000-8000-000000000036",
+      "ejercicioId": "10000000-0000-4000-8000-000000000036",
+      "fecha": "2024-06-15",
+      "series": [
+        { "pesoKg": 50, "repeticiones": 10 },
+        { "pesoKg": 60, "repeticiones": 5 }
+      ],
+      "esperado": { "pesoMaxKg": 60, "volumenKg": 800, "unoRmKg": 70 }
+    },
+    {
+      "id": "20000000-0000-4000-8000-000000000037",
+      "ejercicioId": "10000000-0000-4000-8000-000000000036",
+      "fecha": "2026-02-01",
+      "series": [
+        { "pesoKg": 70, "repeticiones": 5 },
+        { "pesoKg": 60, "repeticiones": 8 }
+      ],
+      "esperado": { "pesoMaxKg": 70, "volumenKg": 830, "unoRmKg": 81.6666666667 }
+    },
+    {
+      "id": "20000000-0000-4000-8000-000000000038",
+      "ejercicioId": "10000000-0000-4000-8000-000000000036",
+      "fecha": "2026-09-10",
+      "series": [
+        { "pesoKg": 75, "repeticiones": 5 },
+        { "pesoKg": 60, "repeticiones": 8 }
+      ],
+      "esperado": { "pesoMaxKg": 75, "volumenKg": 855, "unoRmKg": 87.5 }
+    },
+    {
+      "id": "20000000-0000-4000-8000-000000000039",
+      "ejercicioId": "10000000-0000-4000-8000-000000000036",
+      "fecha": "2026-11-02",
+      "series": [
+        { "pesoKg": 75, "repeticiones": 5 },
+        { "pesoKg": 60, "repeticiones": 8 },
+        { "pesoKg": 0, "repeticiones": 10 },
+        { "pesoKg": 1, "repeticiones": 13 }
+      ],
+      "esperado": { "pesoMaxKg": 75, "volumenKg": 868, "unoRmKg": 87.5 }
+    },
+    {
+      "id": "20000000-0000-4000-8000-000000000040",
+      "ejercicioId": "10000000-0000-4000-8000-000000000037",
+      "fecha": "2026-11-03",
+      "series": [
+        { "pesoKg": 0, "repeticiones": 10 },
+        { "pesoKg": 0, "repeticiones": 8 }
+      ],
+      "esperado": { "pesoMaxKg": 0, "volumenKg": 0, "unoRmKg": null }
+    }
+  ],
+  "periodos": {
+    "1m": ["20000000-0000-4000-8000-000000000039"],
+    "3m": [
+      "20000000-0000-4000-8000-000000000038",
+      "20000000-0000-4000-8000-000000000039"
+    ],
+    "1a": [
+      "20000000-0000-4000-8000-000000000037",
+      "20000000-0000-4000-8000-000000000038",
+      "20000000-0000-4000-8000-000000000039"
+    ],
+    "todo": [
+      "20000000-0000-4000-8000-000000000036",
+      "20000000-0000-4000-8000-000000000037",
+      "20000000-0000-4000-8000-000000000038",
+      "20000000-0000-4000-8000-000000000039"
+    ]
+  },
+  "records": {
+    "pressDeBanca": {
+      "sesionesAnteriores": 4,
+      "pesoMax": {
+        "valorKg": 75,
+        "fecha": "2026-09-10",
+        "entrenamientoId": "20000000-0000-4000-8000-000000000038"
+      },
+      "unoRm": {
+        "valorKg": 87.5,
+        "fecha": "2026-09-10",
+        "entrenamientoId": "20000000-0000-4000-8000-000000000038"
+      },
+      "volumenSesion": {
+        "valorKg": 868,
+        "fecha": "2026-11-02",
+        "entrenamientoId": "20000000-0000-4000-8000-000000000039"
+      }
+    },
+    "dominadas": {
+      "sesionesAnteriores": 1,
+      "pesoMax": {
+        "valorKg": 0,
+        "fecha": "2026-11-03",
+        "entrenamientoId": "20000000-0000-4000-8000-000000000040"
+      },
+      "unoRm": null,
+      "volumenSesion": {
+        "valorKg": 0,
+        "fecha": "2026-11-03",
+        "entrenamientoId": "20000000-0000-4000-8000-000000000040"
+      }
+    }
+  },
+  "escenariosAvisos": {
+    "primeraSesion": {
+      "series": [
+        { "pesoKg": 40, "repeticiones": 10 },
+        { "pesoKg": 50, "repeticiones": 5 }
+      ],
+      "avisosEsperados": []
+    },
+    "igualarRecord": {
+      "series": [{ "pesoKg": 75, "repeticiones": 5 }],
+      "avisosEsperados": []
+    },
+    "superarPeso": {
+      "series": [{ "pesoKg": 76, "repeticiones": 5 }],
+      "avisosInmediatosEsperados": ["peso máximo", "1RM"]
+    },
+    "primeraMetricaUnoRm": {
+      "sesionAnterior": {
+        "series": [{ "pesoKg": 0, "repeticiones": 10 }]
+      },
+      "serieNueva": { "pesoKg": 50, "repeticiones": 8 },
+      "avisosInmediatosEsperados": ["peso máximo"],
+      "unoRmEsperado": 63.3333333333
+    },
+    "volumen": {
+      "series": [
+        { "pesoKg": 75, "repeticiones": 5 },
+        { "pesoKg": 65, "repeticiones": 8 }
+      ],
+      "volumenKg": 895,
+      "avisoAntesDeTerminar": false,
+      "avisoAlTerminar": true,
+      "reabrirSinCambios": { "volumenKg": 895, "aviso": false },
+      "reabrirConSerie": {
+        "serie": { "pesoKg": 10, "repeticiones": 1 },
+        "volumenKg": 905,
+        "aviso": true
+      },
+      "finalizarEntrenamientoSinTerminar": {
+        "volumenKg": 895,
+        "avisoEnResumen": true
+      }
+    }
+  }
+}
