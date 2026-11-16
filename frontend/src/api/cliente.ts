@@ -43,6 +43,19 @@ export class ErrorRed extends Error {
   }
 }
 
+/** Escritura confirmada por la API (método distinto de GET y respuesta 2xx). */
+export interface Escritura { metodo: string; ruta: string }
+const oyentesEscritura = new Set<(escritura: Escritura) => void>();
+
+/**
+ * Suscribe a las escrituras confirmadas, vengan de una mutación o de la cola de sincronización
+ * (T042: actualizar el progreso tras cambios del historial). Devuelve la función para anular la suscripción.
+ */
+export function alEscribir(oyente: (escritura: Escritura) => void) {
+  oyentesEscritura.add(oyente);
+  return () => { oyentesEscritura.delete(oyente); };
+}
+
 function esCuerpoError(valor: unknown): valor is CuerpoError {
   if (!valor || typeof valor !== 'object') return false;
   const candidato = valor as Record<string, unknown>;
@@ -88,5 +101,7 @@ export async function solicitar<T = unknown>(ruta: string, opciones: OpcionesSol
       ? { codigo: cuerpo.codigo, mensaje: cuerpo.mensaje, campos: cuerpo.campos ?? null, actual: cuerpo.actual ?? null }
       : { codigo: 'ERROR_HTTP', mensaje: textos.errores.generico, campos: null, actual: null });
   }
+  const metodo = opciones.method ?? 'GET';
+  if (metodo !== 'GET') for (const oyente of oyentesEscritura) oyente({ metodo, ruta });
   return cuerpo as T;
 }

@@ -5,9 +5,9 @@ import { convertir, formatoFecha, formatoPeso, type Unidad } from './datos';
 const t = textos.progreso;
 
 /** Récords personales (FR-021) como cifras destacadas, cada uno con la fecha en que se logró. */
-export function TarjetasRecords({ records, unidad }: { records: RecordsPersonales | undefined; unidad: Unidad }) {
+export function TarjetasRecords({ records, unidad }: { records: RecordsPersonales; unidad: Unidad }) {
   const tarjetas: [string, RecordPersonal | null | undefined][] = [
-    [t.pesoMax, records?.pesoMax], [t.unoRm, records?.unoRm], [t.mejorVolumen, records?.volumenSesion],
+    [t.pesoMax, records.pesoMax], [t.unoRm, records.unoRm], [t.mejorVolumen, records.volumenSesion],
   ];
   return (
     <section aria-labelledby="titulo-records" className="flex flex-col gap-3">

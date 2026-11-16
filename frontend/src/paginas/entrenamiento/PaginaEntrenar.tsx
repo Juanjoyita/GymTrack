@@ -16,9 +16,9 @@ import { AvisoError } from '../auth/AvisoError';
 import { AvisoConflictos } from './AvisoConflictos';
 import { leerCopia } from './copiaLocal';
 import { EntrenamientoPasado } from './EntrenamientoPasado';
-import { claveRecordsPrevios, ListaEjercicios, useEliminacionesEnEspera, type Avisos } from './ListaEjercicios';
+import { ListaEjercicios, useEliminacionesEnEspera, type Avisos } from './ListaEjercicios';
 import { conPendientes, esFinalizar, opDescartar, opFinalizar, opIniciar, opNota, opRegistrarPasado, vista } from './operaciones';
-import type { RecordsPersonales } from '../../api/progreso';
+import { clavesProgreso, type RecordsPersonales } from '../../api/progreso';
 import { recordsDeSesion, type RecordSesion } from './records';
 import { RegistroPasado } from './RegistroPasado';
 import { ResumenFinal, resumenDe, type Resumen } from './ResumenFinal';
@@ -123,7 +123,7 @@ export function PaginaEntrenar() {
   function finalizar(actual: Entrenamiento, fin?: string) {
     enviarTodas();
     // Volumen de los ejercicios sin terminar (R-11): se comprueba con los récords ya cargados en la sesión.
-    const previos = new Map(actual.ejercicios.map((r) => [r.ejercicioId, cliente.getQueryData<RecordsPersonales>(claveRecordsPrevios(r.ejercicioId, actual.id))]));
+    const previos = new Map(actual.ejercicios.map((r) => [r.ejercicioId, cliente.getQueryData<RecordsPersonales>(clavesProgreso.recordsPrevios(r.ejercicioId, actual.id))]));
     const records = recordsDeSesion(actual, previos);
     setRecordsFinal(records);
     const nuevos = records.filter((x) => x.volumenNuevo && x.volumenKg !== undefined);

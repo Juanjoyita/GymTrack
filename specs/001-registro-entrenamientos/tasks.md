@@ -110,7 +110,7 @@ Una prueba de aceptación debe ejecutarse y fallar por el comportamiento ausente
 - [X] T039 [US3] Implementar API de progreso y récords en `backend/src/progreso/` y registrarla en `backend/src/app.module.ts` — I2; depende: T038; comprobar: periodos 1m/3m/1a/todo, solo sesiones finalizadas propias, exclusión de entrenamiento actual y récords derivados que cambian al corregir/eliminar datos.
 - [X] T040 [US3] Implementar gráfico, tabla equivalente y récords en `frontend/src/paginas/progreso/` — I3; depende: T039; comprobar: mismos datos en Recharts y tabla, filtro temporal, una sesión con aviso de tendencia insuficiente, estados sin datos y distinción adicional al color.
 - [X] T041 [US3] Implementar avisos durante el registro en `frontend/src/paginas/entrenamiento/` — I3; depende: T040; comprobar: peso/1RM tras cada serie; volumen solo al terminar ejercicio o finalizar sesión; reabrir no repite aviso salvo superar máximo ya notificado, persistido según contrato; región aria-live polite sin mover foco.
-- [ ] T042 [US3] Integrar rutas, cliente y textos en `frontend/src/app/`, `frontend/src/api/progreso.ts` y `frontend/src/textos/es.ts` — I3; depende: T041; comprobar: invalidación tras cambios de historial y avisos integrada sin añadir interacciones al registro de serie.
+- [X] T042 [US3] Integrar rutas, cliente y textos en `frontend/src/app/`, `frontend/src/api/progreso.ts` y `frontend/src/textos/es.ts` — I3; depende: T041; comprobar: invalidación tras cambios de historial y avisos integrada sin añadir interacciones al registro de serie.
 
 ### Verificación integrada
 

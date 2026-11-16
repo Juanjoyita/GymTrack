@@ -1,14 +1,17 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, type UseQueryResult } from '@tanstack/react-query';
 import { lazy, Suspense, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { ErrorRed } from '../../api/cliente';
 import { listarEjercicios, type Ejercicio } from '../../api/ejercicios';
-import { CLAVE_PROGRESO, obtenerProgreso, obtenerRecords, type Periodo } from '../../api/progreso';
+import { clavesProgreso, obtenerProgreso, obtenerRecords, type Periodo } from '../../api/progreso';
 import { useSesion } from '../../app/sesion';
 import { useTituloDocumento } from '../../app/useTituloDocumento';
+import { Boton } from '../../componentes/Boton';
 import { CampoSeleccion } from '../../componentes/CampoSeleccion';
 import { AREA_TACTIL, FOCO_VISIBLE } from '../../componentes/estilos';
 import { IconoCargando, IconoProgreso } from '../../componentes/Iconos';
 import { textos } from '../../textos/es';
+import { AvisoError } from '../auth/AvisoError';
 import { puntosProgreso } from './datos';
 import { TablaProgreso } from './TablaProgreso';
 import { TarjetasRecords } from './TarjetasRecords';
@@ -38,32 +41,44 @@ function Cargando() {
   );
 }
 
+/** Error de carga con «Reintentar» (sin red o fallo de la API): nunca se queda cargando para siempre. */
+function ErrorCarga({ consultas }: { consultas: UseQueryResult[] }) {
+  const fallidas = consultas.filter((c) => c.isError);
+  if (!fallidas.length) return null;
+  return (
+    <div className="flex flex-col gap-3">
+      <AvisoError mensaje={fallidas.some((c) => c.error instanceof ErrorRed) ? textos.errores.sinConexion : t.error} />
+      <Boton variante="secundario" onClick={() => { for (const c of fallidas) void c.refetch(); }}>{textos.acceso.reintentar}</Boton>
+    </div>
+  );
+}
+
 export function PaginaProgreso() {
   useTituloDocumento(textos.navegacion.progreso);
   const unidad = useSesion().data?.unidadPeso ?? 'kg';
   const [elegido, setElegido] = useState<string>();
   const [periodo, setPeriodo] = useState<Periodo>('todo');
 
-  const ejercicios = useQuery({ queryKey: ['ejercicios', ''], queryFn: ({ signal }) => listarEjercicios('', signal) });
+  // Sin reintentos automáticos: ante un fallo se ofrece «Reintentar» al momento (como en Entrenar).
+  const ejercicios = useQuery({ queryKey: ['ejercicios', ''], queryFn: ({ signal }) => listarEjercicios('', signal), retry: false });
   const candidatos = usados(ejercicios.data ?? []);
   const predeterminado = useQuery({
-    queryKey: [...CLAVE_PROGRESO, 'predeterminado', candidatos.map((e) => e.id)],
+    queryKey: clavesProgreso.ejercicioConDatos(candidatos.map((e) => e.id)),
     queryFn: ({ signal }) => ejercicioConDatos(candidatos, signal),
-    enabled: ejercicios.isSuccess && elegido === undefined,
+    enabled: ejercicios.isSuccess && elegido === undefined, retry: false,
   });
   const ejercicioId = elegido ?? predeterminado.data ?? undefined;
   const ejercicio = candidatos.find((e) => e.id === ejercicioId);
 
   const progreso = useQuery({
-    queryKey: [...CLAVE_PROGRESO, ejercicioId, periodo],
+    queryKey: clavesProgreso.progreso(ejercicioId ?? '', periodo),
     queryFn: ({ signal }) => obtenerProgreso(ejercicioId!, periodo, signal),
-    enabled: ejercicioId !== undefined,
-    placeholderData: (anterior) => (anterior?.ejercicioId === ejercicioId ? anterior : undefined),
+    enabled: ejercicioId !== undefined, retry: false,
   });
   const records = useQuery({
-    queryKey: [...CLAVE_PROGRESO, ejercicioId, 'records'],
+    queryKey: clavesProgreso.records(ejercicioId ?? ''),
     queryFn: ({ signal }) => obtenerRecords(ejercicioId!, undefined, signal),
-    enabled: ejercicioId !== undefined,
+    enabled: ejercicioId !== undefined, retry: false,
   });
 
   const sinEntrenamientos = ejercicios.isSuccess && (candidatos.length === 0 || (predeterminado.isSuccess && predeterminado.data === null && elegido === undefined));
@@ -73,7 +88,7 @@ export function PaginaProgreso() {
     <div className="flex flex-col gap-6">
       <h1 tabIndex={-1} className="font-display text-4xl font-bold leading-tight text-white focus:outline-none">{textos.navegacion.progreso}</h1>
 
-      {sinEntrenamientos ? (
+      {ejercicios.isError || predeterminado.isError ? <ErrorCarga consultas={[ejercicios, predeterminado]} /> : sinEntrenamientos ? (
         <section className="flex flex-col items-start gap-3 rounded-2xl border border-dashed border-white/15 p-6">
           <IconoProgreso className="size-10 text-lime-300" />
           <p className="font-display text-2xl font-bold text-white">{t.vacio}</p>
@@ -89,9 +104,11 @@ export function PaginaProgreso() {
               opciones={PERIODOS.map((p) => ({ valor: p, texto: t.periodos[p] }))} />
           </div>
 
-          <TarjetasRecords records={records.data} unidad={unidad} />
-
-          {progreso.data === undefined ? <Cargando /> : puntos.length === 0 ? (
+          {progreso.isError || records.isError ? <ErrorCarga consultas={[progreso, records]} /> : (
+            <>
+              {/* Solo con datos confirmados: mientras se cargan no se muestra «Sin datos» ni un valor anterior. */}
+              {records.data && <TarjetasRecords records={records.data} unidad={unidad} />}
+              {progreso.data === undefined ? <Cargando /> : puntos.length === 0 ? (
             <p className="rounded-2xl border border-dashed border-white/15 p-6 text-slate-300">{t.sinSesionesPeriodo(ejercicio?.nombre ?? '')}</p>
           ) : (
             <>
@@ -104,6 +121,8 @@ export function PaginaProgreso() {
                 <GraficoProgreso ejercicio={ejercicio?.nombre ?? ''} puntos={puntos} unidad={unidad} />
               </Suspense>
               <TablaProgreso puntos={puntos} unidad={unidad} />
+            </>
+          )}
             </>
           )}
         </>

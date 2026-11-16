@@ -213,6 +213,7 @@ export const textos = {
     periodo: 'Periodo',
     periodos: { '1m': 'Último mes', '3m': 'Últimos 3 meses', '1a': 'Último año', todo: 'Todo' },
     cargando: 'Cargando tu progreso…',
+    error: 'No se pudo cargar tu progreso.',
     vacio: 'Aún no hay entrenamientos con los que medir tu progreso.',
     vacioDetalle: 'Finaliza tu primer entrenamiento y aquí verás cómo evoluciona cada ejercicio.',
     irAEntrenar: 'Ir a Entrenar',

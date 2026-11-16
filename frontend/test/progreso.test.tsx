@@ -156,12 +156,13 @@ describe('T040: progreso por ejercicio', () => {
 
   it('muestra los récords personales con su fecha y «Sin datos» si una métrica no tiene valor', async () => {
     const u = abrir();
-    const records = await screen.findByRole('region', { name: 'Récords personales' });
-    await waitFor(() => expect(records).toHaveTextContent(/1RM estimado.*Sin datos/));
+    // La sección se vuelve a montar al cambiar de ejercicio (solo se muestra con datos cargados, T042).
+    const records = () => screen.findByRole('region', { name: 'Récords personales' });
+    await waitFor(async () => expect(await records()).toHaveTextContent(/1RM estimado.*Sin datos/));
     await u.selectOptions(screen.getByRole('combobox', { name: 'Ejercicio' }), 'Press de banca');
-    await waitFor(() => expect(records).toHaveTextContent(/Peso máximo.*75 kg.*10 sept 2026/));
-    expect(records).toHaveTextContent(/1RM estimado.*87,5 kg.*10 sept 2026/);
-    expect(records).toHaveTextContent(/Mejor volumen.*868 kg.*2 nov 2026/);
+    await waitFor(async () => expect(await records()).toHaveTextContent(/Peso máximo.*75 kg.*10 sept 2026/));
+    expect(await records()).toHaveTextContent(/1RM estimado.*87,5 kg.*10 sept 2026/);
+    expect(await records()).toHaveTextContent(/Mejor volumen.*868 kg.*2 nov 2026/);
   });
 
   it('en lb convierte los valores al mostrarlos sin cambiar los datos', async () => {

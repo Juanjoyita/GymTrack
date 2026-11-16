@@ -3,7 +3,7 @@ import { useQueries } from '@tanstack/react-query';
 import { useCallback, useRef, useState } from 'react';
 import type { Ejercicio } from '../../api/ejercicios';
 import type { EjercicioRealizado, Entrenamiento, Serie } from '../../api/entrenamientos';
-import { CLAVE_PROGRESO, obtenerRecords, type RecordsPersonales } from '../../api/progreso';
+import { clavesProgreso, obtenerRecords, type RecordsPersonales } from '../../api/progreso';
 import { Boton } from '../../componentes/Boton';
 import { IconoMas } from '../../componentes/Iconos';
 import type { NuevaOperacion, Operacion } from '../../sincronizacion/cola';
@@ -45,13 +45,11 @@ export interface Avisos {
  * ejercicio y se guardan durante la sesión para comparar en local, también sin conexión (R-11). Si no
  * llegaron a cargarse no hay datos fiables y no se avisa.
  */
-export const claveRecordsPrevios = (ejercicioId: string, entrenamientoId: string) => [...CLAVE_PROGRESO, ejercicioId, 'records', entrenamientoId];
-
 function useRecordsPrevios(entrenamiento: Entrenamiento, activos: boolean) {
   const ids = [...new Set(entrenamiento.ejercicios.map((r) => r.ejercicioId))];
   const consultas = useQueries({
     queries: ids.map((id) => ({
-      queryKey: claveRecordsPrevios(id, entrenamiento.id),
+      queryKey: clavesProgreso.recordsPrevios(id, entrenamiento.id),
       queryFn: ({ signal }: { signal: AbortSignal }) => obtenerRecords(id, entrenamiento.id, signal),
       enabled: activos, staleTime: Infinity, gcTime: Infinity, retry: false,
     })),
