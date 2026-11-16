@@ -135,6 +135,20 @@ export const textos = {
       registrado: 'Entrenamiento registrado',
     },
     seguir: 'Seguir entrenando',
+    terminarEjercicio: 'Terminar ejercicio',
+    reabrirEjercicio: 'Reabrir ejercicio',
+    ejercicioTerminado: 'Ejercicio terminado',
+    record: {
+      enSesion: 'Récords de esta sesión',
+      valor: (metrica: string, valor: string) => `${metrica}: ${valor}`,
+      metrica: { pesoMax: 'peso máximo', unoRm: '1RM estimado', volumen: 'volumen' },
+      /** Anuncio de un evento: la primera métrica nombra el ejercicio. */
+      anuncio: (ejercicio: string, metricas: { nombre: string; valor: string }[]) =>
+        metricas.map((m, i) => `Nuevo récord de ${m.nombre}${i === 0 ? ` en ${ejercicio}` : ''}: ${m.valor}.`).join(' '),
+      etiquetaSerie: (pesoMax: boolean, unoRm: boolean) =>
+        pesoMax && unoRm ? 'Récord de peso y 1RM' : pesoMax ? 'Récord de peso máximo' : 'Récord de 1RM',
+      etiquetaVolumen: (valor: string) => `Récord de volumen: ${valor}`,
+    },
     serie: {
       peso: (unidad: string) => `Peso (${unidad})`,
       repeticiones: 'Repeticiones',
@@ -224,6 +238,12 @@ export const textos = {
     tituloGeneral: 'Conflicto con otro dispositivo',
     tituloSerie: (n: number | null) => (n ? `Conflicto en la serie ${n}` : 'Conflicto en una serie'),
     tituloNota: 'Conflicto en la nota',
+    tituloEjercicio: 'Conflicto en un ejercicio',
+    ejercicioCambiado: 'El ejercicio se cambió en otro dispositivo.',
+    terminado: 'terminado',
+    sinTerminar: 'sin terminar',
+    terminarlo: 'terminarlo',
+    reabrirlo: 'reabrirlo',
     cambiada: 'Se cambió en otro dispositivo.',
     ahora: 'Ahora:',
     tuCambio: 'Tu cambio:',

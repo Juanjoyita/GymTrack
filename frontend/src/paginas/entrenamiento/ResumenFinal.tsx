@@ -4,6 +4,8 @@ import type { Entrenamiento } from '../../api/entrenamientos';
 import { Boton } from '../../componentes/Boton';
 import { IconoCheck } from '../../componentes/Iconos';
 import { textos } from '../../textos/es';
+import type { RecordSesion } from './records';
+import { EtiquetaRecord, textoPeso } from './TarjetaEjercicio';
 
 const t = textos.entrenar;
 
@@ -18,9 +20,17 @@ export function resumenDe(e: Entrenamiento, fin = e.fin ?? new Date().toISOStrin
 }
 
 /** Resumen de un entrenamiento terminado: ejercicios, series, duración y volumen (US1 escenario 10). */
-export function ResumenFinal({ titulo = t.finalizado, resumen, onVolver, pendiente = false, contador }: {
+export function ResumenFinal({ titulo = t.finalizado, resumen, onVolver, pendiente = false, contador, records = [], unidad = 'kg' }: {
   titulo?: string; resumen: Resumen; onVolver?: () => void; pendiente?: boolean; contador?: ReactNode;
+  /** Récords logrados en la sesión (FR-022): incluye el volumen comprobado al finalizar. */
+  records?: readonly RecordSesion[]; unidad?: 'kg' | 'lb';
 }) {
+  const r = t.record;
+  const valores = (x: RecordSesion) => [
+    x.pesoMaxKg !== undefined && r.valor(textos.progreso.pesoMax, textoPeso(x.pesoMaxKg, unidad)),
+    x.unoRmKg !== undefined && r.valor(textos.progreso.unoRm, textoPeso(x.unoRmKg, unidad)),
+    x.volumenKg !== undefined && r.valor(textos.progreso.volumen, textoPeso(x.volumenKg, unidad)),
+  ].filter((v): v is string => typeof v === 'string');
   const volumen = new Intl.NumberFormat('es', { maximumFractionDigits: 1 }).format(resumen.volumenKg);
   const datos = [[t.duracion, t.minutos(resumen.duracionMin)], [t.volumen, `${volumen} kg`]];
   return (
@@ -39,6 +49,19 @@ export function ResumenFinal({ titulo = t.finalizado, resumen, onVolver, pendien
           </div>
         ))}
       </dl>
+      {records.length > 0 && (
+        <div className="flex flex-col gap-2">
+          <h3 id="titulo-records-sesion" className="font-display text-xl font-bold text-white">{r.enSesion}</h3>
+          <ul aria-labelledby="titulo-records-sesion" className="flex flex-col gap-2">
+            {records.map((x) => (
+              <li key={x.ejercicioId} className="flex flex-col gap-1.5 rounded-2xl bg-white/5 p-3">
+                <span className="font-semibold text-white">{x.nombre}</span>
+                <span className="flex flex-wrap gap-1.5">{valores(x).map((v) => <EtiquetaRecord key={v}>{v}</EtiquetaRecord>)}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
       {onVolver && <Boton variante="secundario" onClick={onVolver}>{t.volver}</Boton>}
     </section>
   );

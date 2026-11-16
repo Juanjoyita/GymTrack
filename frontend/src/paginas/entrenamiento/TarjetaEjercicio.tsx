@@ -7,10 +7,11 @@ import { Boton } from '../../componentes/Boton';
 import { Campo } from '../../componentes/Campo';
 import { CampoArea } from '../../componentes/CampoArea';
 import { AREA_TACTIL, FOCO_VISIBLE } from '../../componentes/estilos';
-import { IconoLapiz, IconoPapelera, IconoReloj } from '../../componentes/Iconos';
+import { IconoCheck, IconoLapiz, IconoPapelera, IconoReloj, IconoTrofeo } from '../../componentes/Iconos';
 import type { NuevaOperacion } from '../../sincronizacion/cola';
 import { textos } from '../../textos/es';
 import { opAnadirSerie, opEditarSerie, opEliminarSerie, opNotaEjercicio, type PesoEntrada } from './operaciones';
+import type { MetricaSerie } from './records';
 
 const t = textos.entrenar;
 const ts = t.serie;
@@ -37,6 +38,21 @@ interface TarjetaEjercicioProps {
   encolar: (op: NuevaOperacion) => void;
   /** Permite a la página enviar una eliminación en espera antes de finalizar. */
   registrarEliminacion: (vaciar: (() => void) | null) => void;
+  /** Series que establecen un récord de peso máximo o 1RM (solo en el entrenamiento en curso). */
+  marcas?: ReadonlyMap<string, MetricaSerie[]>;
+  onSerieRegistrada?: (serie: Serie) => void;
+  /** «Terminar ejercicio» (R-11); recibe la serie cuya eliminación se acaba de enviar, para no contarla. */
+  onTerminar?: (excluida?: string) => void;
+  onReabrir?: () => void;
+}
+
+/** Etiqueta discreta de récord: icono de trofeo y texto, nunca solo color. */
+export function EtiquetaRecord({ children }: { children: string }) {
+  return (
+    <span className="inline-flex w-fit items-center gap-1 whitespace-nowrap rounded-full bg-lime-300/10 px-2 py-0.5 text-xs font-semibold text-lime-200 ring-1 ring-inset ring-lime-300/30">
+      <IconoTrofeo className="size-3.5" />{children}
+    </span>
+  );
 }
 
 /**
@@ -44,9 +60,11 @@ interface TarjetaEjercicioProps {
  * añade la siguiente serie, prellenada con la anterior o con la primera de la última sesión, o
  * edita una existente. Eliminar quita la serie al momento y permite deshacer durante unos segundos.
  */
-export function TarjetaEjercicio({ entrenamientoId, realizado, unidad, pendiente, pendientes, encolar, registrarEliminacion }: TarjetaEjercicioProps) {
+export function TarjetaEjercicio({ entrenamientoId, realizado, unidad, pendiente, pendientes, encolar, registrarEliminacion, marcas, onSerieRegistrada, onTerminar, onReabrir }: TarjetaEjercicioProps) {
   const [editando, setEditando] = useState<Serie | null>(null);
   const [eliminando, setEliminando] = useState<{ serie: Serie; numero: number } | null>(null);
+  // Tras guardar o cancelar, el formulario se vuelve a montar: su botón recupera el foco para seguir con el teclado.
+  const [devolverFoco, setDevolverFoco] = useState(false);
   const temporizador = useRef<ReturnType<typeof setTimeout>>(undefined);
   const ultima = useQuery({ queryKey: ['ultima-sesion', realizado.ejercicioId], queryFn: () => obtenerUltimaSesion(realizado.ejercicioId), staleTime: 5 * 60_000, retry: false });
 
@@ -72,6 +90,7 @@ export function TarjetaEjercicio({ entrenamientoId, realizado, unidad, pendiente
   useEffect(() => () => { if (temporizador.current) confirmarEliminacion.current(); }, []);
 
   function eliminar(serie: Serie, numeroSerie: number) {
+    setDevolverFoco(false);
     if (eliminando) confirmarEliminacion.current();
     if (editando?.id === serie.id) setEditando(null);
     setEliminando({ serie, numero: numeroSerie });
@@ -85,6 +104,7 @@ export function TarjetaEjercicio({ entrenamientoId, realizado, unidad, pendiente
   }
 
   function guardar(repeticiones: number, pesoEntrada: PesoEntrada) {
+    setDevolverFoco(true);
     const pesoKg = pesoEntrada.unidad === 'kg' ? pesoEntrada.valor : Number(lbAKg(pesoEntrada.valor).toFixed(4));
     if (editando) {
       encolar(opEditarSerie(entrenamientoId, realizado.id, editando, repeticiones, pesoEntrada, pesoKg));
@@ -94,6 +114,16 @@ export function TarjetaEjercicio({ entrenamientoId, realizado, unidad, pendiente
     const orden = Math.max(0, ...realizado.series.map((s) => s.orden)) + 1;
     const serie: Serie = { id: crypto.randomUUID(), orden, repeticiones, pesoKg, registradaEn: new Date().toISOString(), version: 1 };
     encolar(opAnadirSerie(entrenamientoId, realizado.id, serie, pesoEntrada));
+    onSerieRegistrada?.(serie);
+  }
+
+  const terminado = realizado.terminadoEn !== null;
+  function alternarTerminado() {
+    if (terminado) return onReabrir?.();
+    // Una eliminación en espera se envía ya, para que el volumen comprobado sea el que queda.
+    const excluida = eliminando?.serie.id;
+    if (eliminando) confirmarEliminacion.current();
+    onTerminar?.(excluida);
   }
 
   function guardarNota(texto: string) {
@@ -121,27 +151,50 @@ export function TarjetaEjercicio({ entrenamientoId, realizado, unidad, pendiente
       {series.length ? (
         <ol className="flex flex-col divide-y divide-white/5 rounded-2xl border border-white/10">
           {series.map((serie, i) => (
-            <li key={serie.id} className={`flex items-center gap-2 py-1 pl-4 pr-1 ${editando?.id === serie.id ? 'bg-lime-300/10' : ''}`}>
+            <li key={serie.id} className={`flex flex-wrap items-center gap-x-2 py-1 pl-4 pr-1 ${editando?.id === serie.id ? 'bg-lime-300/10' : ''}`}>
               <span className="w-16 shrink-0 text-sm font-semibold text-slate-400">{ts.titulo(i + 1)}</span>
               <span className="flex-1 font-display text-xl font-bold text-white">{`${textoPeso(serie.pesoKg, unidad)} × ${serie.repeticiones}`}</span>
               {pendientes.has(serie.id) && (
                 <span className="text-amber-300" title={ts.pendiente}><IconoReloj className="size-4" /><span className="sr-only">{ts.pendiente}</span></span>
               )}
-              <button type="button" onClick={() => setEditando(serie)} aria-label={ts.editar(i + 1)} className={botonIcono}><IconoLapiz className="size-5" /></button>
-              <button type="button" onClick={() => eliminar(serie, i + 1)} aria-label={ts.eliminar(i + 1)} className={botonIcono}><IconoPapelera className="size-5" /></button>
+              {!terminado && (
+                <>
+                  <button type="button" onClick={() => setEditando(serie)} aria-label={ts.editar(i + 1)} className={botonIcono}><IconoLapiz className="size-5" /></button>
+                  <button type="button" onClick={() => eliminar(serie, i + 1)} aria-label={ts.eliminar(i + 1)} className={botonIcono}><IconoPapelera className="size-5" /></button>
+                </>
+              )}
+              {/* La etiqueta ocupa su propia línea bajo el peso, alineada con él, para no comprimirse junto a los botones. */}
+              {marcas?.has(serie.id) && (
+                <span className="basis-full pb-2 pl-[4.5rem]">
+                  <EtiquetaRecord>{t.record.etiquetaSerie(marcas.get(serie.id)!.includes('pesoMax'), marcas.get(serie.id)!.includes('unoRm'))}</EtiquetaRecord>
+                </span>
+              )}
             </li>
           ))}
         </ol>
       ) : !pendiente && !ultima.data && <p className="text-sm text-slate-400">{t.sinSeries}</p>}
 
-      <FormularioSerie
-        key={editando ? `editar-${editando.id}` : `nueva-${series.length}`}
-        unidad={unidad}
-        inicial={prellenado}
-        editando={editando !== null}
-        onGuardar={guardar}
-        onCancelar={() => setEditando(null)}
-      />
+      {terminado ? (
+        <div className="flex flex-wrap items-center gap-2">
+          <p className="flex items-center gap-1.5 text-sm font-semibold text-slate-300"><IconoCheck className="size-4 text-lime-300" />{t.ejercicioTerminado}</p>
+          {realizado.volumenNotificadoKg !== null && <EtiquetaRecord>{t.record.etiquetaVolumen(textoPeso(realizado.volumenNotificadoKg, unidad))}</EtiquetaRecord>}
+        </div>
+      ) : (
+        <FormularioSerie
+          key={editando ? `editar-${editando.id}` : `nueva-${series.length}`}
+          unidad={unidad}
+          inicial={prellenado}
+          editando={editando !== null}
+          onGuardar={guardar}
+          enfocar={devolverFoco}
+          onCancelar={() => { setDevolverFoco(true); setEditando(null); }}
+        />
+      )}
+
+      {/* Un único botón que cambia de texto: el foco se queda en él al terminar o reabrir. */}
+      {onTerminar && (terminado || series.length > 0) && !editando && (
+        <Boton variante="secundario" onClick={alternarTerminado}>{terminado ? t.reabrirEjercicio : t.terminarEjercicio}</Boton>
+      )}
 
       {eliminando && (
         <div role="status" className="flex items-center justify-between gap-3 rounded-2xl bg-white/5 py-1 pl-4 pr-1 text-sm text-slate-200">
@@ -155,9 +208,12 @@ export function TarjetaEjercicio({ entrenamientoId, realizado, unidad, pendiente
   );
 }
 
-function FormularioSerie({ unidad, inicial, editando, onGuardar, onCancelar }: {
-  unidad: Unidad; inicial: Valores; editando: boolean; onGuardar: (repeticiones: number, peso: PesoEntrada) => void; onCancelar: () => void;
+function FormularioSerie({ unidad, inicial, editando, enfocar, onGuardar, onCancelar }: {
+  unidad: Unidad; inicial: Valores; editando: boolean; enfocar: boolean; onGuardar: (repeticiones: number, peso: PesoEntrada) => void; onCancelar: () => void;
 }) {
+  const botonEnviar = useRef<HTMLButtonElement>(null);
+  // Solo al montarse: el formulario nuevo que sustituye al que se acaba de enviar o cancelar.
+  useEffect(() => { if (enfocar) botonEnviar.current?.focus(); }, []);
   const [valores, setValores] = useState(inicial);
   const [errores, setErrores] = useState<{ peso?: string; repeticiones?: string }>({});
   // Si el prellenado llega después (la última sesión se consulta en red), se adopta solo mientras el
@@ -197,11 +253,11 @@ function FormularioSerie({ unidad, inicial, editando, onGuardar, onCancelar }: {
       </div>
       {editando ? (
         <div className="flex gap-2">
-          <Boton type="submit" className="flex-1">{ts.guardarCambios}</Boton>
+          <Boton ref={botonEnviar} type="submit" className="flex-1">{ts.guardarCambios}</Boton>
           <Boton variante="secundario" onClick={onCancelar}>{ts.cancelar}</Boton>
         </div>
       ) : (
-        <Boton type="submit" className="w-full">{ts.anadir}</Boton>
+        <Boton ref={botonEnviar} type="submit" className="w-full">{ts.anadir}</Boton>
       )}
     </form>
   );

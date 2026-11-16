@@ -1,21 +1,27 @@
 import { vi } from 'vitest';
 
 // API en memoria con estado según contracts/api.md («Entrenamientos — P1»): guarda, versiona, valida
-// la versión esperada y descarta como el servidor. La usan las pruebas de T027 y T028.
+// la versión esperada y descarta como el servidor. La usan las pruebas de T027, T028 y T041.
 export interface SerieApi { id: string; orden: number; repeticiones: number; pesoKg: number; registradaEn: string; version: number }
-export interface RealizadoApi { id: string; ejercicioId: string; nombre: string; posicion: number; nota: string | null; terminadoEn: null; volumenNotificadoKg: null; version: number; series: SerieApi[] }
+export interface RealizadoApi { id: string; ejercicioId: string; nombre: string; posicion: number; nota: string | null; terminadoEn: string | null; volumenNotificadoKg: number | null; version: number; series: SerieApi[] }
 export interface EntrenamientoApi { id: string; estado: 'en_curso' | 'finalizado'; inicio: string; fin: string | null; zonaHoraria: string; nota: string | null; rutinaOrigenId: null; inactivo: boolean; version: number; ejercicios: RealizadoApi[] }
 
 export const PRESS = { id: '27000000-0000-4000-8000-000000000001', nombre: 'Press de banca', grupoMuscular: 'pecho', propio: false, ultimoUso: null };
 export const SENTADILLA = { id: '27000000-0000-4000-8000-000000000002', nombre: 'Sentadilla', grupoMuscular: 'cuadriceps', propio: false, ultimoUso: null };
 
 export const usuario = { id: '00000000-0000-4000-8000-000000000271', email: 't027@example.invalid', unidadPeso: 'kg' as 'kg' | 'lb', zonaHoraria: 'America/Bogota' };
-/** entrenamiento: el que está en curso; pasados: finalizados (p. ej., registrados a posteriori). */
-export const servidor: { entrenamiento: EntrenamientoApi | null; pasados: EntrenamientoApi[]; ultimas: Record<string, unknown>; sinRed: boolean; ultimaLenta?: Promise<void>; ejercicioLento?: Promise<void>; peticiones: { metodo: string; ruta: string; cuerpo: unknown }[] } = { entrenamiento: null, pasados: [], ultimas: {}, sinRed: false, peticiones: [] };
+/** Récords de un ejercicio sin sesiones anteriores (contrato «GET /progreso/:id/records»). */
+export const SIN_RECORDS = { sesionesAnteriores: 0, pesoMax: null, unoRm: null, volumenSesion: null };
+
+/**
+ * entrenamiento: el que está en curso; pasados: finalizados (p. ej., registrados a posteriori);
+ * records: récords de sesiones anteriores por ejercicio (T041); recordsFallan: la consulta responde 500.
+ */
+export const servidor: { entrenamiento: EntrenamientoApi | null; pasados: EntrenamientoApi[]; ultimas: Record<string, unknown>; records: Record<string, unknown>; recordsFallan?: boolean; sinRed: boolean; ultimaLenta?: Promise<void>; ejercicioLento?: Promise<void>; peticiones: { metodo: string; ruta: string; cuerpo: unknown }[] } = { entrenamiento: null, pasados: [], ultimas: {}, records: {}, sinRed: false, peticiones: [] };
 
 /** Estado inicial para cada prueba: sin entrenamiento, con red y usuario en kg. */
 export function reiniciarServidor() {
-  Object.assign(servidor, { entrenamiento: null, pasados: [], ultimas: {}, sinRed: false, ultimaLenta: undefined, ejercicioLento: undefined, peticiones: [] });
+  Object.assign(servidor, { entrenamiento: null, pasados: [], ultimas: {}, records: {}, recordsFallan: false, sinRed: false, ultimaLenta: undefined, ejercicioLento: undefined, peticiones: [] });
   usuario.unidadPeso = 'kg';
 }
 
@@ -42,6 +48,8 @@ export function instalarApi() {
     if (ruta === '/ejercicios') return json(200, [PRESS, SENTADILLA]);
     const ultima = /^\/ejercicios\/([^/]+)\/ultima-sesion$/.exec(ruta);
     if (ultima) { await servidor.ultimaLenta; return json(200, servidor.ultimas[ultima[1]] ?? null); }
+    const records = /^\/progreso\/([^/]+)\/records$/.exec(ruta);
+    if (records) return servidor.recordsFallan ? json(500, { codigo: 'ERROR', mensaje: 'Error.', campos: null, actual: null }) : json(200, servidor.records[records[1]] ?? SIN_RECORDS);
     if (ruta === '/entrenamientos/en-curso') return enCurso ? json(200, conResumen(enCurso)) : json(204);
     if (metodo === 'POST' && ruta === '/entrenamientos' && cuerpo.fin) {
       const pasado: EntrenamientoApi = { id: cuerpo.id, estado: 'finalizado', inicio: cuerpo.inicio, fin: cuerpo.fin, zonaHoraria: cuerpo.zonaHoraria, nota: null, rutinaOrigenId: null, inactivo: false, version: 1, ejercicios: [] };
@@ -83,6 +91,17 @@ export function instalarApi() {
       const r: RealizadoApi = { id: cuerpo.id, ejercicioId: cuerpo.ejercicioId, nombre: ej?.nombre ?? '?', posicion: cuerpo.posicion, nota: null, terminadoEn: null, volumenNotificadoKg: null, version: 1, series: [] };
       e.ejercicios.push(r);
       return json(201, r);
+    }
+    const ejercicio = new RegExp(`^${base}/ejercicios/([^/]+)$`).exec(ruta);
+    if (metodo === 'PATCH' && ejercicio) {
+      const r = e.ejercicios.find((x) => x.id === ejercicio[1]);
+      if (!r) return json(404, { codigo: 'NO_ENCONTRADO', mensaje: 'No.', campos: null, actual: null });
+      if (cuerpo.version !== r.version) return json(409, { codigo: 'CONFLICTO_VERSION', mensaje: 'Versión.', campos: null, actual: r });
+      if (cuerpo.nota !== undefined) r.nota = cuerpo.nota;
+      if (cuerpo.terminado !== undefined) r.terminadoEn = cuerpo.terminado ? new Date().toISOString() : null;
+      if (cuerpo.volumenNotificadoKg !== undefined) r.volumenNotificadoKg = cuerpo.volumenNotificadoKg;
+      r.version += 1;
+      return json(200, r);
     }
     const series = new RegExp(`^${base}/ejercicios/([^/]+)/series(?:/([^/]+))?$`).exec(ruta);
     if (series) {
