@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { ErrorRed } from '../../api/cliente';
 import { CLAVE_EN_CURSO, obtenerEntrenamientoEnCurso, type Entrenamiento } from '../../api/entrenamientos';
@@ -16,10 +16,13 @@ import { AvisoError } from '../auth/AvisoError';
 import { AvisoConflictos } from './AvisoConflictos';
 import { leerCopia } from './copiaLocal';
 import { EntrenamientoPasado } from './EntrenamientoPasado';
-import { ListaEjercicios, useEliminacionesEnEspera } from './ListaEjercicios';
+import { ListaEjercicios, useEliminacionesEnEspera, type Avisos } from './ListaEjercicios';
 import { conPendientes, esFinalizar, opDescartar, opFinalizar, opIniciar, opNota, opRegistrarPasado, vista } from './operaciones';
+import { clavesProgreso, type RecordsPersonales } from '../../api/progreso';
+import { recordsDeSesion, type RecordSesion } from './records';
 import { RegistroPasado } from './RegistroPasado';
 import { ResumenFinal, resumenDe, type Resumen } from './ResumenFinal';
+import { textoPeso } from './TarjetaEjercicio';
 
 const t = textos.entrenar;
 const HORA_MS = 3_600_000;
@@ -38,7 +41,7 @@ type Modo =
   | { tipo: 'normal' }
   | { tipo: 'registrar-pasado' }
   | { tipo: 'pasado'; entrenamiento: Entrenamiento }
-  | { tipo: 'resumen'; titulo: string; resumen: Resumen }
+  | { tipo: 'resumen'; titulo: string; resumen: Resumen; records?: RecordSesion[] }
   | { tipo: 'descartado' };
 
 /**
@@ -61,6 +64,11 @@ export function PaginaEntrenar() {
   const [inactividadDescartada, setInactividadDescartada] = useState(false);
   const [confirmarDescarte, setConfirmarDescarte] = useState(false);
   const { registrarPara, enviarTodas } = useEliminacionesEnEspera();
+  // Último aviso de récord (FR-022): una sola región aria-live, sin mover el foco; cada evento la reemplaza.
+  const [anuncio, setAnuncio] = useState<string | null>(null);
+  const avisos = useMemo<Avisos>(() => ({ anunciar: setAnuncio }), []);
+  // Récords de la sesión calculados al pulsar «Finalizar», para el resumen.
+  const [recordsFinal, setRecordsFinal] = useState<RecordSesion[]>([]);
   const enCurso = useQuery({
     queryKey: CLAVE_EN_CURSO, queryFn: obtenerEntrenamientoEnCurso,
     // La copia local se muestra al instante (y sin red); se actualiza en cuanto responde el servidor.
@@ -87,7 +95,7 @@ export function PaginaEntrenar() {
     // La sesión recién finalizada pasa a ser «la última vez» de sus ejercicios.
     void cliente.invalidateQueries({ queryKey: ['ultima-sesion'] });
     const final = respuesta as (Entrenamiento & { descartado?: boolean }) | undefined;
-    setModo(final?.descartado ? { tipo: 'descartado' } : { tipo: 'resumen', titulo: t.finalizado, resumen: final ? resumenDe(final) : resumenDe(nuevoEntrenamiento(new Date(), new Date())) });
+    setModo(final?.descartado ? { tipo: 'descartado' } : { tipo: 'resumen', titulo: t.finalizado, resumen: final ? resumenDe(final) : resumenDe(nuevoEntrenamiento(new Date(), new Date())), records: recordsFinal });
   });
 
   function repetir(id: string) { cola.repetir(id); }
@@ -101,6 +109,8 @@ export function PaginaEntrenar() {
   function iniciar() {
     setModo({ tipo: 'normal' });
     setInactividadDescartada(false);
+    setAnuncio(null);
+    setRecordsFinal([]);
     encolar(opIniciar(nuevoEntrenamiento(new Date(), null)));
   }
 
@@ -112,6 +122,12 @@ export function PaginaEntrenar() {
 
   function finalizar(actual: Entrenamiento, fin?: string) {
     enviarTodas();
+    // Volumen de los ejercicios sin terminar (R-11): se comprueba con los récords ya cargados en la sesión.
+    const previos = new Map(actual.ejercicios.map((r) => [r.ejercicioId, cliente.getQueryData<RecordsPersonales>(clavesProgreso.recordsPrevios(r.ejercicioId, actual.id))]));
+    const records = recordsDeSesion(actual, previos);
+    setRecordsFinal(records);
+    const nuevos = records.filter((x) => x.volumenNuevo && x.volumenKg !== undefined);
+    setAnuncio(nuevos.length ? nuevos.map((x) => t.record.anuncio(x.nombre, [{ nombre: t.record.metrica.volumen, valor: textoPeso(x.volumenKg!, unidad) }])).join(' ') : null);
     setInactividadDescartada(true);
     encolar(opFinalizar(actual, fin));
   }
@@ -133,7 +149,7 @@ export function PaginaEntrenar() {
 
   let contenido;
   if (modo.tipo === 'resumen') {
-    contenido = <ResumenFinal titulo={modo.titulo} resumen={modo.resumen} onVolver={volver} />;
+    contenido = <ResumenFinal titulo={modo.titulo} resumen={modo.resumen} onVolver={volver} records={modo.records} unidad={unidad} />;
   } else if (modo.tipo === 'registrar-pasado') {
     contenido = <RegistroPasado onRegistrar={registrarPasado} onCancelar={volver} />;
   } else if (modo.tipo === 'pasado') {
@@ -142,7 +158,7 @@ export function PaginaEntrenar() {
   } else if (finalizacion && entrenamiento) {
     contenido = navigator.onLine
       ? <p role="status" className="flex items-center gap-2 text-slate-400"><IconoCargando className="size-5 motion-safe:animate-spin" />{t.finalizando}</p>
-      : <ResumenFinal resumen={resumenDe(entrenamiento, new Date().toISOString())} pendiente contador={contador} />;
+      : <ResumenFinal resumen={resumenDe(entrenamiento, new Date().toISOString())} pendiente contador={contador} records={recordsFinal} unidad={unidad} />;
   } else if (entrenamiento === undefined) {
     contenido = enCurso.isError ? (
       <div className="flex flex-col gap-3">
@@ -174,7 +190,7 @@ export function PaginaEntrenar() {
           <p className="text-sm text-slate-400">{t.desde} {horaLocal(actual.inicio, actual.zonaHoraria)}</p>
           {contador}
         </div>
-        <ListaEjercicios entrenamiento={actual} unidad={unidad} pendientes={pendientes} encolar={encolar} registrarPara={registrarPara} />
+        <ListaEjercicios entrenamiento={actual} unidad={unidad} pendientes={pendientes} encolar={encolar} registrarPara={registrarPara} avisos={avisos} />
         <CampoArea etiqueta={t.notaEntrenamiento} defaultValue={actual.nota ?? ''} maxLength={1000} onBlur={(e) => guardarNota(actual, e.target.value)} />
         <Boton onClick={() => finalizar(actual)} className="w-full">{t.finalizar}</Boton>
 
@@ -211,6 +227,7 @@ export function PaginaEntrenar() {
       <AvisoConflictos conflictos={conflictos} entrenamiento={entrenamiento} unidad={unidad} onRepetir={repetir} onDescartar={descartarConflicto} />
       {modo.tipo === 'descartado' && <AvisoError mensaje={t.descartado} />}
       {contenido}
+      <p aria-live="polite" className="sr-only">{anuncio}</p>
     </section>
   );
 }

@@ -38,6 +38,10 @@ function describir(c: Conflicto, e: Entrenamiento | null | undefined, unidad: 'k
     const vigente = (c.actual as { nota?: string | null } | null)?.nota;
     return { titulo: t.tituloNota, texto: <>{t.notaCambiada} {t.ahora} «{vigente ?? t.sinNota}». {t.tuNota} «{v.nota ?? t.sinNota}».</>, repetible: true };
   }
+  if (c.motivo === 'CONFLICTO_VERSION' && v?.tipo === 'terminar-ejercicio') {
+    const vigente = (c.actual as { terminadoEn?: string | null } | null)?.terminadoEn;
+    return { titulo: t.tituloEjercicio, texto: <>{t.ejercicioCambiado} {t.ahora} {vigente ? t.terminado : t.sinTerminar}. {t.tuCambio} {v.terminadoEn ? t.terminarlo : t.reabrirlo}.</>, repetible: true };
+  }
   if (c.motivo === 'CONFLICTO_VERSION') return { titulo: t.tituloGeneral, texto: t.entrenamientoCambiado, repetible: true };
   if (c.motivo === 'ELIMINADO') return { titulo: t.tituloGeneral, texto: t.entrenamientoNoExiste, repetible: false };
   return { titulo: t.tituloGeneral, texto: t.rechazado, repetible: false };

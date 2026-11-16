@@ -5,6 +5,7 @@ import { CerrarSesion } from '../paginas/auth/CerrarSesion';
 import { PaginaEntrenar } from '../paginas/entrenamiento/PaginaEntrenar';
 import { PaginaDetalleHistorial } from '../paginas/historial/PaginaDetalleHistorial';
 import { PaginaHistorial } from '../paginas/historial/PaginaHistorial';
+import { PaginaProgreso } from '../paginas/progreso/PaginaProgreso';
 import { Layout } from './Layout';
 import { NoEncontrada } from './NoEncontrada';
 import { PaginaSeccion } from './PaginaSeccion';
@@ -26,7 +27,7 @@ export const rutas: RouteObject[] = [
       element: <Layout />,
       children: [
         ...SECCIONES.map((seccion) => {
-          const element = seccion.clave === 'entrenar' ? <PaginaEntrenar /> : seccion.clave === 'historial' ? <PaginaHistorial /> : (
+          const element = seccion.clave === 'entrenar' ? <PaginaEntrenar /> : seccion.clave === 'historial' ? <PaginaHistorial /> : seccion.clave === 'progreso' ? <PaginaProgreso /> : (
             <PaginaSeccion seccion={seccion}>
               {seccion.clave === 'cuenta' && <CerrarSesion />}
             </PaginaSeccion>

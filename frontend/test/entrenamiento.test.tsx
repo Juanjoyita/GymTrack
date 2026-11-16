@@ -75,6 +75,33 @@ describe('T027: iniciar y registrar series', () => {
     await waitFor(() => expect(servidor.entrenamiento?.ejercicios[0].series.map((s) => [s.orden, s.pesoKg, s.repeticiones])).toEqual([[1, 60, 8], [2, 60, 8]]));
   });
 
+  it('tras registrar una serie el foco vuelve a «Añadir serie»: con el teclado, Enter repite la serie prellenada', async () => {
+    const u = userEvent.setup();
+    abrir();
+    const t = await iniciarYAnadir(u);
+    await anadirSerie(u, t, '60', '8');
+    await within(t).findByText('60 kg × 8');
+    expect(within(t).getByRole('button', { name: 'Añadir serie' })).toHaveFocus();
+    await u.keyboard('{Enter}');
+    expect(await within(t).findByRole('button', { name: 'Editar serie 2' })).toBeInTheDocument();
+    expect(within(t).getByRole('button', { name: 'Añadir serie' })).toHaveFocus();
+  });
+
+  it('al guardar o cancelar una edición el foco vuelve a «Añadir serie»; al eliminar no se le lleva', async () => {
+    const u = userEvent.setup();
+    abrir();
+    const t = await iniciarYAnadir(u);
+    await anadirSerie(u, t, '60', '8');
+    await u.click(await within(t).findByRole('button', { name: 'Editar serie 1' }));
+    await u.click(within(t).getByRole('button', { name: 'Guardar cambios' }));
+    expect(within(t).getByRole('button', { name: 'Añadir serie' })).toHaveFocus();
+    await u.click(within(t).getByRole('button', { name: 'Editar serie 1' }));
+    await u.click(within(t).getByRole('button', { name: 'Cancelar' }));
+    expect(within(t).getByRole('button', { name: 'Añadir serie' })).toHaveFocus();
+    await u.click(within(t).getByRole('button', { name: 'Eliminar serie 1' }));
+    expect(within(t).getByRole('button', { name: 'Añadir serie' })).not.toHaveFocus();
+  });
+
   it('prellena la primera serie con la primera de la última sesión y muestra lo que se hizo', async () => {
     servidor.ultimas[PRESS.id] = { entrenamientoId: 'x', fecha: '2026-11-10T18:00:00Z', series: [{ orden: 1, repeticiones: 5, pesoKg: 100 }, { orden: 2, repeticiones: 4, pesoKg: 100 }] };
     const u = userEvent.setup();

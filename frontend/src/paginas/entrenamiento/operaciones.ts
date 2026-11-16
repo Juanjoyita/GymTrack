@@ -17,6 +17,7 @@ export type Vista =
   | { tipo: 'eliminar-serie'; realizadoId: string; serieId: string }
   | { tipo: 'nota'; nota: string | null }
   | { tipo: 'nota-ejercicio'; realizadoId: string; nota: string | null }
+  | { tipo: 'terminar-ejercicio'; realizadoId: string; terminadoEn: string | null; volumenNotificadoKg?: number }
   | { tipo: 'finalizar' };
 
 export const vista = (op: Operacion | NuevaOperacion) => op.vista as Vista | undefined;
@@ -78,6 +79,27 @@ export function opNotaEjercicio(entrenamientoId: string, realizado: EjercicioRea
   };
 }
 
+/**
+ * «Terminar ejercicio» (FR-022, R-11). Si se avisa de un récord de volumen, el volumen notificado viaja
+ * en la misma petición para no repetir el aviso en este u otro dispositivo.
+ */
+export function opTerminarEjercicio(entrenamientoId: string, realizado: EjercicioRealizado, volumenNotificadoKg?: number): NuevaOperacion {
+  const extra = volumenNotificadoKg === undefined ? {} : { volumenNotificadoKg };
+  return {
+    metodo: 'PATCH', ruta: `${ruta(entrenamientoId)}/ejercicios/${realizado.id}`, recurso: realizado.id, version: realizado.version, dependeDe: [realizado.id],
+    cuerpo: { terminado: true, ...extra, version: realizado.version },
+    vista: { tipo: 'terminar-ejercicio', realizadoId: realizado.id, terminadoEn: new Date().toISOString(), ...extra },
+  };
+}
+
+/** Reabrir un ejercicio terminado; el volumen ya notificado se conserva. */
+export function opReabrirEjercicio(entrenamientoId: string, realizado: EjercicioRealizado): NuevaOperacion {
+  return {
+    metodo: 'PATCH', ruta: `${ruta(entrenamientoId)}/ejercicios/${realizado.id}`, recurso: realizado.id, version: realizado.version, dependeDe: [realizado.id],
+    cuerpo: { terminado: false, version: realizado.version }, vista: { tipo: 'terminar-ejercicio', realizadoId: realizado.id, terminadoEn: null },
+  };
+}
+
 /** fin solo se indica tras inactividad (hora de la última serie); si no, el servidor usa la hora actual. */
 export function opFinalizar(entrenamiento: Entrenamiento, fin?: string): NuevaOperacion {
   return { metodo: 'POST', ruta: `${ruta(entrenamiento.id)}/finalizar`, recurso: entrenamiento.id, version: entrenamiento.version, dependeDe: [entrenamiento.id], cuerpo: fin ? { fin, version: entrenamiento.version } : { version: entrenamiento.version }, vista: { tipo: 'finalizar' } };
@@ -118,6 +140,12 @@ export function aplicarOperacion(e: Entrenamiento | null, op: Operacion | NuevaO
       const confirmado = respuesta as EjercicioRealizado | undefined;
       return conRealizado(e, v.realizadoId, (r) => ({ ...r, nota: v.nota, version: confirmado?.version ?? r.version }));
     }
+    case 'terminar-ejercicio': {
+      const confirmado = respuesta as EjercicioRealizado | undefined;
+      return conRealizado(e, v.realizadoId, (r) => (confirmado
+        ? { ...r, terminadoEn: confirmado.terminadoEn, volumenNotificadoKg: confirmado.volumenNotificadoKg, version: confirmado.version }
+        : { ...r, terminadoEn: v.terminadoEn, volumenNotificadoKg: v.volumenNotificadoKg ?? r.volumenNotificadoKg }));
+    }
     case 'finalizar':
       return respuesta === undefined ? e : null;
     case 'descartar':
@@ -155,9 +183,11 @@ export function aplicarVigente(e: Entrenamiento | null, conflicto: Conflicto): E
     const vigente = conflicto.actual as Entrenamiento | null;
     return vigente ? { ...e, nota: vigente.nota, version: vigente.version } : e;
   }
-  if (v.tipo === 'nota-ejercicio' && conflicto.motivo === 'CONFLICTO_VERSION') {
+  if ((v.tipo === 'nota-ejercicio' || v.tipo === 'terminar-ejercicio') && conflicto.motivo === 'CONFLICTO_VERSION') {
     const vigente = conflicto.actual as EjercicioRealizado | null;
-    return vigente ? conRealizado(e, v.realizadoId, (r) => ({ ...r, nota: vigente.nota, version: vigente.version })) : e;
+    return vigente ? conRealizado(e, v.realizadoId, (r) => ({
+      ...r, nota: vigente.nota, terminadoEn: vigente.terminadoEn, volumenNotificadoKg: vigente.volumenNotificadoKg, version: vigente.version,
+    })) : e;
   }
   return e;
 }
