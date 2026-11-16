@@ -1,5 +1,7 @@
 # US4 — Evidencia roja T044
 
+> Evidencia histórica de T044. La implementación posterior de API y sus resultados verdes se documentan en [T045–T048](../../backend/test/resultados-t045-t048.md). T049/T050 siguen pendientes.
+
 Fecha: 2026-11-16 (America/Bogota). Rama: `001-t044-pruebas-cuenta`.
 Alcance: **solo T044**, aceptación previa a implementar US4. Sin commit; pendiente de revisión.
 

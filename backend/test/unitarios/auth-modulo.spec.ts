@@ -2,6 +2,7 @@ import { Controller, Get, Req, Param, type INestApplication } from '@nestjs/comm
 import { Test } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { hash, argon2id } from 'argon2';
+import { RecuperacionService } from '../../src/auth/recuperacion.service';
 import { AuthModule } from '../../src/auth/auth.module';
 import { opcionesJwt } from '../../src/auth/auth.config';
 import type { PeticionAutenticada } from '../../src/auth/auth.types';
@@ -51,7 +52,12 @@ describe('T016: módulo aislado, cookie HTTPS y límite de intentos (sin AppModu
       save: jest.fn(async (row) => { rows.push(row); return row; }),
     };
     const module = await Test.createTestingModule({ imports: [AuthModule], controllers: [PropiedadPrueba] })
-      .overrideProvider(getRepositoryToken(Usuario)).useValue(repo).compile();
+      .overrideProvider(getRepositoryToken(Usuario)).useValue(repo)
+      // Esta suite aísla P1 sin BD; la recuperación real se acepta en cuenta.e2e-spec.ts.
+      .overrideProvider(RecuperacionService).useValue({
+        recuperar: () => { throw new Error('Recuperación fuera del alcance de esta suite aislada.'); },
+        restablecer: () => { throw new Error('Recuperación fuera del alcance de esta suite aislada.'); },
+      }).compile();
     app = module.createNestApplication({ logger: false, httpsOptions: opcionesTls() });
     configureApi(app);
     await app.init();

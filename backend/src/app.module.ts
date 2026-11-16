@@ -1,3 +1,4 @@
+import { CuentaModule } from './cuenta/cuenta.module';
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AuthModule } from './auth/auth.module';
@@ -9,6 +10,6 @@ import { ProgresoModule } from './progreso/progreso.module';
 @Module({
   imports: [TypeOrmModule.forRootAsync({
     useFactory: () => ({ ...databaseOptions(), retryAttempts: 0, verboseRetryLog: false })
-  }), AuthModule, EjerciciosModule, EntrenamientosModule, ProgresoModule]
+  }), AuthModule, EjerciciosModule, EntrenamientosModule, ProgresoModule, CuentaModule]
 })
 export class AppModule {}

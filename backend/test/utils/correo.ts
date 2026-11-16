@@ -54,13 +54,13 @@ async function consultar(ruta: string, method = 'GET', body?: object): Promise<s
   const { url, ca } = configuracion();
   return new Promise((resolveRequest, reject) => {
     const req = request(new URL(ruta, url), { method, ca, rejectUnauthorized: true,
-      headers: body ? { 'Content-Type': 'application/json' } : undefined
+      headers: body ? { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(JSON.stringify(body)) } : undefined
     }, (res) => {
       let data = '';
       res.setEncoding('utf8');
       res.on('data', (chunk: string) => { data += chunk; });
       res.on('end', () => {
-        if (!res.statusCode || res.statusCode >= 300) return reject(new Error(`Mailpit respondió HTTP ${res.statusCode}.`));
+        if (!res.statusCode || res.statusCode >= 300) return reject(new Error(`Mailpit ${method} ${new URL(ruta, url).pathname} respondió HTTP ${res.statusCode}.`));
         resolveRequest(data);
       });
       res.on('error', reject);

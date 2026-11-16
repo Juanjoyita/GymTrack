@@ -4,6 +4,7 @@ import { getDataSourceToken } from '@nestjs/typeorm';
 import { randomBytes } from 'node:crypto';
 import { verify } from 'argon2';
 import type { DataSource } from 'typeorm';
+import { CorreoService } from '../../src/correo/correo.service';
 import { AppModule } from '../../src/app.module';
 import { configureApi } from '../../src/main';
 import { opcionesTls } from '../../src/comun/tls';
@@ -14,7 +15,7 @@ import { esperarCorreo, listarCorreos, eliminarCorreo } from '../utils/correo';
 
 const mensaje = { mensaje: 'Si el email está registrado, recibirás un enlace en unos minutos.' };
 
-describe('T044: aceptación REST US4 (rojo antes de T045–T048)', () => {
+describe('T044: aceptación REST US4', () => {
   let app: INestApplication | undefined;
   let source: DataSource;
   let propio: CuentaFixture, ajeno: CuentaFixture;
@@ -93,6 +94,30 @@ describe('T044: aceptación REST US4 (rojo antes de T045–T048)', () => {
       }
     }
     expect(JSON.stringify(await snapshotCuenta(source, propio)) === JSON.stringify(antes)).toBe(true);
+  });
+
+  it('CSV neutraliza fórmulas de texto y JSON conserva la nota original =1+1', async () => {
+    const agent = await login();
+    for (const texto of ['=1+1', '+1+1', '-1+1', '@SUM(1,1)']) {
+      await source.query('UPDATE entrenamiento SET nota=$1 WHERE id=$2', [texto, propio.ids.entrenamiento]);
+      await source.query('UPDATE ejercicio SET nombre=$1 WHERE id=$2', [texto, propio.ids.ejercicio]);
+      await source.query('UPDATE ejercicio_realizado SET nota=$1 WHERE id=$2', [texto, propio.ids.realizado]);
+      const json = await agent.get('/api/exportacion?formato=json').expect(200);
+      const entrenamiento = json.body.entrenamientos.find((t: { id: string }) => t.id === propio.ids.entrenamiento);
+      expect(entrenamiento.nota).toBe(texto);
+      expect(entrenamiento.ejercicios[0].nombre).toBe(texto);
+      expect(entrenamiento.ejercicios[0].nota).toBe(texto);
+      const csv = await agent.get('/api/exportacion?formato=csv').expect(200);
+      const [cabecera, ...filas] = leerCsv(csv.text);
+      for (const fila of filas) {
+        for (const campo of ['ejercicio', 'notaEntrenamiento', 'notaEjercicio']) {
+          expect(fila[cabecera.indexOf(campo)]).toBe(`'${texto}`);
+        }
+        expect(fila[cabecera.indexOf('pesoKg')]).toMatch(/^(60\.125|0)$/);
+      }
+      const [guardado] = await source.query('SELECT nota FROM entrenamiento WHERE id=$1', [propio.ids.entrenamiento]);
+      expect(guardado.nota).toBe(texto);
+    }
   });
 
   it('elimina todos los dependientes, conserva catálogo/ajenos e invalida dos sesiones', async () => {
@@ -187,4 +212,103 @@ describe('T044: aceptación REST US4 (rojo antes de T045–T048)', () => {
       agent.post('/api/auth/restablecer').send({ token: propio.token, contrasenaNueva })));
     expect(respuestas.map((r) => r.status).sort()).toEqual([204, 410]);
   });
+  it('T046: limita recuperar a diez intentos por minuto, también para desconocidos', async () => {
+    const email = `t046.inexistente.${propio.ids.usuario}@example.invalid`;
+    for (let i = 0; i < 10; i++) await cliente().post('/api/auth/recuperar').send({ email }).expect(202);
+    const r = await cliente().post('/api/auth/recuperar').send({ email }).expect(429);
+    expect(r.body.codigo).toBe('DEMASIADAS_PETICIONES');
+  });
+
+  it('T046: valida email, tipo JSON y contraseña nueva sin cambiar la cuenta', async () => {
+    const antes = await snapshotCuenta(source, propio);
+    await cliente().post('/api/auth/recuperar').send({ email: 'invalido' }).expect(400);
+    await cliente().post('/api/auth/recuperar').type('form').send({ email: propio.email }).expect(400);
+    const r = await cliente().post('/api/auth/restablecer').send({ token: propio.token, contrasenaNueva: 'corta' }).expect(400);
+    expect(Boolean(r.body.campos?.contrasenaNueva)).toBe(true);
+    expect(JSON.stringify(await snapshotCuenta(source, propio)) === JSON.stringify(antes)).toBe(true);
+  });
+
+  it('T046: dos solicitudes concurrentes dejan un solo token vigente', async () => {
+    const respuestas = await Promise.all([cliente(), cliente()].map((agent) => agent.post('/api/auth/recuperar').send({ email: propio.email })));
+    expect(respuestas.map((r) => r.status)).toEqual([202, 202]);
+    const [{ total }] = await source.query(`SELECT count(*)::int AS total FROM token_recuperacion
+      WHERE usuario_id=$1 AND usado_en IS NULL AND expira_en>clock_timestamp()`, [propio.ids.usuario]);
+    expect(total).toBe(1);
+  });
+
+  it('T046: un fallo SMTP no revela si el email existe ni devuelve el error del transporte', async () => {
+    const envio = jest.spyOn(app!.get(CorreoService), 'enviar').mockRejectedValue(new Error('detalle SMTP sensible'));
+    try {
+      const r = await cliente().post('/api/auth/recuperar').send({ email: propio.email }).expect(202);
+      const desconocido = await cliente().post('/api/auth/recuperar').send({ email: `t046.${propio.ids.usuario}@example.invalid` }).expect(202);
+      expect(r.body).toEqual(mensaje); expect(desconocido.body).toEqual(r.body);
+      expect(envio).toHaveBeenCalledTimes(1);
+    } finally { envio.mockRestore(); }
+  });
+
+  it('T046: recuperación y restablecimiento no registran email, token ni contraseña', async () => {
+    const log = jest.spyOn(console, 'info').mockImplementation(() => undefined);
+    try {
+      await cliente().post('/api/auth/recuperar').send({ email: propio.email }).expect(202);
+      const correo = await esperarCorreo(propio.email);
+      const enlace = correo.Text.match(/https:\/\/[^\s<>]+\/restablecer\?token=[^\s<>]+/)?.[0];
+      expect(Boolean(enlace)).toBe(true);
+      const token = new URL(enlace!).searchParams.get('token')!;
+      await cliente().post('/api/auth/restablecer').send({ token, contrasenaNueva }).expect(204);
+      const salida = JSON.stringify(log.mock.calls);
+      expect([propio.email, token, contrasenaNueva].some((dato) => salida.includes(dato))).toBe(false);
+    } finally { log.mockRestore(); }
+  });
+
+  it('T047: valida preferencias y formato, rechazando identidad enviada por el cliente', async () => {
+    const agent = await login(), antes = await snapshotCuenta(source, propio);
+    for (const body of [{ unidadPeso: 'oz' }, { zonaHoraria: 'No/Existe' }, {}, { unidadPeso: 'lb', usuarioId: ajeno.ids.usuario }]) {
+      const r = await agent.patch('/api/cuenta/preferencias').send(body).expect(400);
+      expect(r.body.codigo).toBe('VALIDACION');
+    }
+    await agent.get('/api/exportacion?formato=xml').expect(400);
+    expect(JSON.stringify(await snapshotCuenta(source, propio)) === JSON.stringify(antes)).toBe(true);
+  });
+
+  it('T047: cambia solo zona horaria y exporta siempre al dueño de la cookie', async () => {
+    const agent = await login();
+    const r = await agent.patch('/api/cuenta/preferencias').send({ zonaHoraria: 'Europe/Madrid' }).expect(200);
+    expect(r.body.unidadPeso).toBe('kg'); expect(r.body.zonaHoraria).toBe('Europe/Madrid');
+    const exportado = await agent.get(`/api/exportacion?formato=json&usuarioId=${ajeno.ids.usuario}`).expect(200);
+    expect(exportado.body.usuario.id).toBe(propio.ids.usuario);
+    expect(JSON.stringify(exportado.body).includes(ajeno.ids.usuario)).toBe(false);
+    expect(exportado.headers['cache-control']).toBe('no-store');
+  });
+
+  it('T047: exporta una cuenta sin entrenamientos como JSON vacío y CSV con cabecera', async () => {
+    await source.query('DELETE FROM entrenamiento WHERE usuario_id=$1', [propio.ids.usuario]);
+    const agent = await login();
+    const json = await agent.get('/api/exportacion?formato=json').expect(200);
+    expect(json.body.entrenamientos).toEqual([]);
+    expect(json.body.rutinas).toHaveLength(1);
+    const csv = await agent.get('/api/exportacion?formato=csv').expect(200);
+    expect(leerCsv(csv.text)).toHaveLength(1);
+  });
+
+  it('T048: un error durante el borrado revierte la cuenta y todos sus dependientes', async () => {
+    const agent = await login();
+    const antes = await snapshotCuenta(source, propio), otro = await snapshotCuenta(source, ajeno);
+    await source.query(`CREATE FUNCTION t048_abortar_borrado() RETURNS trigger LANGUAGE plpgsql AS $$
+      BEGIN RAISE EXCEPTION 'fallo sintetico T048'; END $$`);
+    await source.query(`CREATE TRIGGER zz_t048_abortar AFTER DELETE ON usuario FOR EACH ROW EXECUTE FUNCTION t048_abortar_borrado()`);
+    const r = await agent.delete('/api/cuenta').send({ contrasena: contrasenaCuenta }).expect(500);
+    expect(r.body.codigo).toBe('ERROR_INTERNO');
+    expect(JSON.stringify(await snapshotCuenta(source, propio)) === JSON.stringify(antes)).toBe(true);
+    expect(JSON.stringify(await snapshotCuenta(source, ajeno)) === JSON.stringify(otro)).toBe(true);
+    await agent.get('/api/auth/yo').expect(200);
+  });
+
+  it('T048: borrar no acepta identidad ajena ni contraseña ausente', async () => {
+    const agent = await login(), antes = await snapshotCuenta(source, propio), otro = await snapshotCuenta(source, ajeno);
+    await agent.delete('/api/cuenta').send({ contrasena: contrasenaCuenta, usuarioId: ajeno.ids.usuario }).expect(400);
+    await agent.delete('/api/cuenta').send({}).expect(400);
+    expect(JSON.stringify(await snapshotCuenta(source, propio)) === JSON.stringify(antes)).toBe(true);
+    expect(JSON.stringify(await snapshotCuenta(source, ajeno)) === JSON.stringify(otro)).toBe(true);
+  });
+
 });
