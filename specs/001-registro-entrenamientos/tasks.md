@@ -82,18 +82,18 @@ Una prueba de aceptación debe ejecutarse y fallar por el comportamiento ausente
 
 ### Aceptación primero
 
-- [ ] T030 [US2] Escribir aceptación en `backend/test/integracion/historial.e2e-spec.ts` y `e2e/tests/historial.spec.ts` — I4; depende: T029; comprobar: rojo para orden descendente/paginación, resumen exacto, detalle ordenado, filtros combinados por ejercicio/días locales, vacío, edición y eliminación confirmada; otro usuario no puede consultar ni modificar.
+- [x] T030 [US2] Escribir aceptación en `backend/test/integracion/historial.e2e-spec.ts` y `e2e/tests/historial.spec.ts` — I4; depende: T029; comprobar: rojo para orden descendente/paginación, resumen exacto, detalle ordenado, filtros combinados por ejercicio/días locales, vacío, edición y eliminación confirmada; otro usuario no puede consultar ni modificar.
 
 ### Implementación
 
-- [ ] T031 [US2] Implementar consultas de lista/detalle en `backend/src/entrenamientos/historial.service.ts` — I4; depende: T030; comprobar: solo finalizados propios, cursor estable y resumen derivado, rango local y zonas de medianoche correctos contra fixtures.
-- [ ] T032 [US2] Integrar consultas y correcciones de sesiones pasadas en `backend/src/entrenamientos/entrenamientos.controller.ts` — I4; depende: T031; comprobar: edición de series/ejercicios/nota y eliminación con versiones reutilizan P1; resúmenes se recalculan sin modificar otras sesiones.
-- [ ] T033 [US2] Implementar lista, detalle, filtros y edición en `frontend/src/paginas/historial/` — I4; depende: T032; comprobar: resumen con fecha/duración/ejercicios/series/volumen, estados vacíos, registro pasado, confirmación de eliminación e invalidación de caché tras cambios.
-- [ ] T034 [US2] Integrar navegación y textos de historial en `frontend/src/app/`, `frontend/src/api/historial.ts` y `frontend/src/textos/es.ts` — I4; depende: T033; comprobar: filtros y detalle accesibles por URL y teclado; interfaz refleja correcciones sin datos obsoletos.
+- [x] T031 [US2] Implementar consultas de lista/detalle en `backend/src/entrenamientos/historial.service.ts` — I4; depende: T030; comprobar: solo finalizados propios, cursor estable y resumen derivado, rango local y zonas de medianoche correctos contra fixtures.
+- [x] T032 [US2] Integrar consultas y correcciones de sesiones pasadas en `backend/src/entrenamientos/entrenamientos.controller.ts` — I4; depende: T031; comprobar: edición de series/ejercicios/nota y eliminación con versiones reutilizan P1; resúmenes se recalculan sin modificar otras sesiones.
+- [x] T033 [US2] Implementar lista, detalle, filtros y edición en `frontend/src/paginas/historial/` — I4; depende: T032; comprobar: resumen con fecha/duración/ejercicios/series/volumen, estados vacíos, registro pasado, confirmación de eliminación e invalidación de caché tras cambios.
+- [x] T034 [US2] Integrar navegación y textos de historial en `frontend/src/app/`, `frontend/src/api/historial.ts` y `frontend/src/textos/es.ts` — I4; depende: T033; comprobar: filtros y detalle accesibles por URL y teclado; interfaz refleja correcciones sin datos obsoletos.
 
 ### Verificación integrada
 
-- [ ] T035 [US2] Ejecutar V8 y revisión accesible en `e2e/tests/historial.spec.ts` y `e2e/resultados/us2.md` — I4; depende: T034; comprobar: T030 verde, confirmación respeta cancelar, SC-007 <15 s para encontrar última sesión, axe y revisión manual pasan; comprobar recálculo del progreso al incorporar US3 en T043.
+- [x] T035 [US2] Ejecutar V8 y revisión accesible en `e2e/tests/historial.spec.ts` y `e2e/resultados/us2.md` — I4; depende: T034; comprobar: T030 verde, confirmación respeta cancelar, SC-007 <15 s para encontrar última sesión, axe y revisión manual pasan; comprobar recálculo del progreso al incorporar US3 en T043.
 
 ## Fase 5 — US3 / P3: Progreso y récords
 

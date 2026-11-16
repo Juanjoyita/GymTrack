@@ -16,7 +16,7 @@ export default defineConfig({
     screenshot: 'only-on-failure',
   },
   webServer: {
-    command: 'npm run dev', cwd: resolve(__dirname, '..'),
+    command: 'node scripts/e2e-servers.mjs', cwd: resolve(__dirname, '..'),
     url: 'https://localhost:5173', ignoreHTTPSErrors: false,
     reuseExistingServer: false, timeout: 60000,
     env: { NODE_ENV: 'test' },

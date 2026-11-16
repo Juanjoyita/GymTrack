@@ -50,6 +50,8 @@ function crearApi(conSesion = false) {
     }
     if (metodo === 'POST' && ruta === '/auth/logout') { usuario = null; return json(204); }
     if (!usuario) return error(401, 'NO_AUTENTICADO', CREDENCIALES_INVALIDAS);
+    if (metodo === 'GET' && ruta === '/entrenamientos') return json(200, { elementos: [], siguienteCursor: null });
+    if (metodo === 'GET' && ruta === '/ejercicios') return json(200, []);
     return error(404, 'NO_ENCONTRADO', 'Recurso no encontrado.');
   });
 
@@ -141,7 +143,7 @@ describe('T024: inicio de sesión', () => {
     const { usuario, router } = iniciar('/historial');
     await tituloLogin();
     await rellenarLogin(usuario, `  ${ANA.email} `, CONTRASENA);
-    const titulo = await screen.findByRole('heading', { level: 1, name: 'Historial' });
+    const titulo = await screen.findByRole('heading', { level: 1, name: textos.historial.titulo });
     expect(router.state.location.pathname).toBe('/historial');
     expect(titulo).toHaveFocus();
     expect(api.peticiones.find((p) => p.ruta === '/auth/login')?.cuerpo).toEqual({ email: ANA.email, contrasena: CONTRASENA });

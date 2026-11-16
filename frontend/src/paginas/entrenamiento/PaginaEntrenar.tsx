@@ -1,5 +1,6 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { ErrorRed } from '../../api/cliente';
 import { CLAVE_EN_CURSO, obtenerEntrenamientoEnCurso, type Entrenamiento } from '../../api/entrenamientos';
 import { useSesion } from '../../app/sesion';
@@ -47,6 +48,8 @@ type Modo =
  */
 export function PaginaEntrenar() {
   useTituloDocumento(textos.navegacion.entrenar);
+  const [parametros, setParametros] = useSearchParams();
+  const registrarPasadoSolicitado = parametros.get('registrarPasado') === '1';
   const { data: usuario } = useSesion();
   const usuarioId = usuario?.id ?? '';
   const unidad = usuario?.unidadPeso ?? 'kg';
@@ -54,7 +57,7 @@ export function PaginaEntrenar() {
   const cliente = useQueryClient();
   const pendientes = usePendientes();
   const conflictos = useConflictos();
-  const [modo, setModo] = useState<Modo>({ tipo: 'normal' });
+  const [modo, setModo] = useState<Modo>(() => registrarPasadoSolicitado ? { tipo: 'registrar-pasado' } : { tipo: 'normal' });
   const [inactividadDescartada, setInactividadDescartada] = useState(false);
   const [confirmarDescarte, setConfirmarDescarte] = useState(false);
   const { registrarPara, enviarTodas } = useEliminacionesEnEspera();
@@ -63,6 +66,16 @@ export function PaginaEntrenar() {
     // La copia local se muestra al instante (y sin red); se actualiza en cuanto responde el servidor.
     initialData: () => leerCopia(usuarioId), initialDataUpdatedAt: 0,
   });
+
+  useEffect(() => {
+    if (!registrarPasadoSolicitado) return;
+    setModo({ tipo: 'registrar-pasado' });
+    setParametros((actuales) => {
+      const siguientes = new URLSearchParams(actuales);
+      siguientes.delete('registrarPasado');
+      return siguientes;
+    }, { replace: true });
+  }, [registrarPasadoSolicitado, setParametros]);
 
   const finalizacion = pendientes.find(esFinalizar);
   const base = enCurso.data;
