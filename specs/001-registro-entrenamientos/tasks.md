@@ -150,9 +150,9 @@ Una prueba de aceptación debe ejecutarse y fallar por el comportamiento ausente
 
 ### Implementación
 
-- [ ] T052 [US5] Escribir unitarios rojos e implementar esquema de rutina en `packages/domain/test/rutina.test.ts` y `packages/domain/src/validacion/rutina.ts` — I2; depende: T051; comprobar: día, nombre, orden y al menos un ejercicio validados de forma compartida; unitarios verdes.
-- [ ] T053 [US5] Implementar CRUD transaccional en `backend/src/rutinas/` — I2; depende: T052; comprobar: propietario, versiones, sustitución ordenada de lista completa y rechazo de ejercicios ajenos; rutina nunca vacía.
-- [ ] T054 [US5] Integrar comienzo desde rutina en `backend/src/entrenamientos/`, protección de ejercicios en `backend/src/ejercicios/` y módulo en `backend/src/app.module.ts` — I2; depende: T053; comprobar: copia ejercicios en orden/sin series, respeta sesión activa única, borrado de rutina no cambia sesión y ejercicio usado en rutina devuelve sus referencias.
+- [X] T052 [US5] Escribir unitarios rojos e implementar esquema de rutina en `packages/domain/test/rutina.test.ts` y `packages/domain/src/validacion/rutina.ts` — I2; depende: T051; comprobar: día, nombre, orden y al menos un ejercicio validados de forma compartida; unitarios verdes.
+- [X] T053 [US5] Implementar CRUD transaccional en `backend/src/rutinas/` — I2; depende: T052; comprobar: propietario, versiones, sustitución ordenada de lista completa y rechazo de ejercicios ajenos; rutina nunca vacía.
+- [X] T054 [US5] Integrar comienzo desde rutina en `backend/src/entrenamientos/`, protección de ejercicios en `backend/src/ejercicios/` y módulo en `backend/src/app.module.ts` — I2; depende: T053; comprobar: copia ejercicios en orden/sin series, respeta sesión activa única, borrado de rutina no cambia sesión y ejercicio usado en rutina devuelve sus referencias.
 - [ ] T055 [US5] Implementar lista/editor/inicio desde rutina en `frontend/src/paginas/rutinas/`, `frontend/src/api/rutinas.ts`, `frontend/src/app/` y `frontend/src/textos/es.ts` — I3; depende: T054; comprobar: crear/editar nombre/día/ejercicios, eliminar con confirmación e iniciar flujo P1 sin modificar plantilla al cambiar sesión.
 
 ### Verificación integrada
