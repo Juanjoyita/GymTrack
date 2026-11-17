@@ -116,5 +116,21 @@ REST usa un esquema aislado y lo elimina al terminar; E2E usa únicamente `gymtr
 y borra por UUID/email exactos sus dos cuentas y sus correos, sin vaciar buzones ni tablas globales.
 La exportación se lee desde la descarga real del navegador, sin sustituirla por llamadas a API.
 
-La revisión manual de teclado/foco, WCAG completa, inspección de exportaciones y verde funcional
-quedan para T050, cuando existan las pantallas. No se declara US4 verde y no se integra ni se hace commit.
+Las verificaciones de descarga, axe y teclado/foco anotadas como pendientes durante T044 se
+ejecutaron en T050. La revisión de accesibilidad de todas las pantallas sigue perteneciendo a T059.
+
+## T050 — Verificación integrada V10
+
+Fecha: 2026-11-16. Estado: **completada**; US4 pasa sus criterios V10.
+
+| Verificación | Resultado |
+|---|---|
+| `npm run test:backend -- --runTestsByPath test/integracion/cuenta.e2e-spec.ts` | **28/28 REST verdes**; preferencias, exportaciones, privacidad, borrado y recuperación |
+| `npm run test:e2e -- cuenta.spec.ts` | **6/6 E2E verdes**; descargas reales JSON/CSV, recuperación, expiración, axe WCAG y foco/tamaño táctil |
+| Mailpit | Correo recibido solo para la cuenta registrada; reutilización/caducidad rechazadas |
+| Aislamiento | Los datos de la segunda cuenta permanecen intactos en REST y navegador |
+
+Para habilitar la infraestructura local se expusieron PostgreSQL y Mailpit con la variable `HOME`
+apuntando al perfil de Windows para resolver los certificados TLS locales. El proyecto declara
+Node 22; las pruebas finales de T050 se repitieron con Node 22.23.5 (runtime temporal, sin cambios
+en manifiestos). No se hizo commit.
