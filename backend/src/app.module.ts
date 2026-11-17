@@ -6,10 +6,11 @@ import { EjerciciosModule } from './ejercicios/ejercicios.module';
 import { EntrenamientosModule } from './entrenamientos/entrenamientos.module';
 import { databaseOptions } from './database/data-source';
 import { ProgresoModule } from './progreso/progreso.module';
+import { RutinasModule } from './rutinas/rutinas.module';
 
 @Module({
   imports: [TypeOrmModule.forRootAsync({
     useFactory: () => ({ ...databaseOptions(), retryAttempts: 0, verboseRetryLog: false })
-  }), AuthModule, EjerciciosModule, EntrenamientosModule, ProgresoModule, CuentaModule]
+  }), AuthModule, EjerciciosModule, EntrenamientosModule, ProgresoModule, CuentaModule, RutinasModule]
 })
 export class AppModule {}

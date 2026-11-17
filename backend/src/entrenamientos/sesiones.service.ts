@@ -8,7 +8,7 @@ import { Serie } from '../database/entities/serie';
 const conflictoActivo = () => new ConflictException({ codigo: 'ENTRENAMIENTO_EN_CURSO', mensaje: 'Ya existe un entrenamiento en curso.', campos: null, actual: null });
 const noEncontrado = () => new NotFoundException({ codigo: 'NO_ENCONTRADO', mensaje: 'No se encontró el entrenamiento.', campos: null, actual: null });
 
-type EntradaSesion = { id?: string; inicio?: string | Date; zonaHoraria: string; fin?: string | Date; nota?: string | null };
+type EntradaSesion = { id?: string; inicio?: string | Date; zonaHoraria: string; fin?: string | Date; nota?: string | null; rutinaId?: string };
 
 @Injectable()
 export class SesionesService {
@@ -31,6 +31,10 @@ export class SesionesService {
       throw new BadRequestException({ codigo: 'VALIDACION', mensaje: 'Fechas de entrenamiento inválidas.', campos: { inicio: 'Revisa inicio y fin.' }, actual: null });
     }
     try {
+      if (entrada.rutinaId) {
+        if (fin) throw new BadRequestException({ codigo: 'VALIDACION', mensaje: 'Revisa los campos marcados.', campos: { fin: 'Un entrenamiento iniciado desde una rutina queda en curso.' }, actual: null });
+        return await this.iniciarDesdeRutina(usuarioId, id, inicio, entrada, entrada.rutinaId);
+      }
       // Solo INSERT: save() puede convertir una carrera de UUID en UPDATE de la fila ajena.
       const [insertado] = await this.entrenamientos.query(
         `INSERT INTO entrenamiento (id, usuario_id, estado, inicio, fin, zona_horaria, ultima_actividad_en, nota, rutina_origen_id)
@@ -51,6 +55,44 @@ export class SesionesService {
     const existente = await this.reintento(usuarioId, id);
     if (!existente) throw noEncontrado();
     return existente;
+  }
+
+  private async iniciarDesdeRutina(usuarioId: string, id: string, inicio: Date, entrada: EntradaSesion, rutinaId: string) {
+    return this.source.transaction(async (manager) => {
+      const [rutina] = await manager.query<Array<{ id: string }>>(
+        'SELECT id FROM rutina WHERE id = $1 AND usuario_id = $2 FOR SHARE', [rutinaId, usuarioId],
+      );
+      if (!rutina) throw noEncontrado();
+
+      const ejercicios = await manager.query<Array<{ ejercicio_id: string }>>(
+        'SELECT ejercicio_id FROM rutina_ejercicio WHERE rutina_id = $1 ORDER BY posicion', [rutinaId],
+      );
+      if (ejercicios.length === 0) throw noEncontrado();
+
+      const [entrenamiento] = await manager.query<EntrenamientoRow[]>(
+        `INSERT INTO entrenamiento
+           (id, usuario_id, estado, inicio, fin, zona_horaria, ultima_actividad_en, nota, rutina_origen_id)
+         VALUES ($1, $2, 'en_curso', $3, NULL, $4, $3, $5, $6)
+         ON CONFLICT (id) DO NOTHING RETURNING *`,
+        [id, usuarioId, inicio, entrada.zonaHoraria, entrada.nota ?? null, rutinaId],
+      );
+      if (!entrenamiento) {
+        const [existente] = await manager.query<EntrenamientoRow[]>(
+          'SELECT * FROM entrenamiento WHERE id = $1', [id],
+        );
+        if (!existente || existente.usuario_id !== usuarioId) throw noEncontrado();
+        return { entrenamiento: existente, creado: false };
+      }
+
+      for (const [index, ejercicio] of ejercicios.entries()) {
+        await manager.query(
+          `INSERT INTO ejercicio_realizado (id, entrenamiento_id, ejercicio_id, posicion)
+           VALUES ($1, $2, $3, $4)`,
+          [randomUUID(), id, ejercicio.ejercicio_id, index + 1],
+        );
+      }
+      return { entrenamiento, creado: true };
+    });
   }
 
   private async reintento(usuarioId: string, id: string) {

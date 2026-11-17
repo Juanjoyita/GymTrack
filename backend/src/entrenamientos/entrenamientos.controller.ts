@@ -38,9 +38,9 @@ export class EntrenamientosController {
     const inicio = body.inicio === undefined ? undefined : fecha(body.inicio, 'inicio');
     const fin = body.fin === undefined ? undefined : fecha(body.fin, 'fin');
     if (typeof body.zonaHoraria !== 'string' || !body.zonaHoraria.trim() || body.zonaHoraria.length > 64) throw invalido('zonaHoraria');
-    if (body.rutinaId !== undefined && body.rutinaId !== null) throw invalido('rutinaId'); // P5 se integra en su tarea.
+    const rutinaId = body.rutinaId === undefined || body.rutinaId === null ? undefined : uuid(body.rutinaId, 'rutinaId');
     try {
-      const result = await this.sesiones.iniciarConEstado(user, { id, inicio, fin, zonaHoraria: body.zonaHoraria, nota: body.nota === undefined ? undefined : nota(body.nota) });
+      const result = await this.sesiones.iniciarConEstado(user, { id, inicio, fin, zonaHoraria: body.zonaHoraria, nota: body.nota === undefined ? undefined : nota(body.nota), rutinaId });
       response.status(result.creado ? 201 : 200);
     } catch (error) {
       if (error instanceof ConflictException) {
@@ -66,9 +66,12 @@ export class EntrenamientosController {
   }
 
   @Get(':id')
-  obtenerHistorial(@Req() req: PeticionAutenticada, @Param('id') id: string) {
+  async obtenerHistorial(@Req() req: PeticionAutenticada, @Param('id') id: string) {
+    const user = usuario(req);
     uuid(id);
-    return this.historial.obtener(usuario(req), id);
+    const activa = await this.sesiones.recuperar(user);
+    if (activa?.id === id) return this.presentacion.entrenamiento(user, id);
+    return this.historial.obtener(user, id);
   }
 
   @Patch(':id')
