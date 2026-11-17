@@ -1,5 +1,6 @@
 import { Body, Controller, Get, HttpCode, Post, Req, Res, UseGuards } from '@nestjs/common';
-import { ThrottlerGuard } from '@nestjs/throttler';
+import { RecuperacionService } from './recuperacion.service';
+import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
 import { AuthService } from './auth.service';
 import { SoloJsonGuard } from './solo-json.guard';
 import { Publico } from './publico.decorator';
@@ -7,16 +8,11 @@ import { DURACION_SESION_SEGUNDOS } from './auth.config';
 import { noAutenticado } from './auth.errors';
 import type { PeticionAutenticada } from './auth.types';
 
-const COOKIE = 'gt_sesion';
-const COOKIE_SEGURA = Object.freeze({ httpOnly: true, secure: true, sameSite: 'strict' as const, path: '/' });
-interface RespuestaCookie {
-  cookie(name: string, value: string, options: typeof COOKIE_SEGURA & { maxAge: number }): unknown;
-  clearCookie(name: string, options: typeof COOKIE_SEGURA): unknown;
-}
+import { COOKIE, COOKIE_SEGURA, type RespuestaCookie } from './auth.cookie';
 
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly auth: AuthService) {}
+  constructor(private readonly auth: AuthService, private readonly recuperacion: RecuperacionService) {}
 
   @Publico()
   @UseGuards(ThrottlerGuard, SoloJsonGuard)
@@ -36,6 +32,19 @@ export class AuthController {
     response.cookie(COOKIE, acceso.token, { ...COOKIE_SEGURA, maxAge: DURACION_SESION_SEGUNDOS * 1000 });
     return acceso.usuario;
   }
+
+  @Publico()
+  @UseGuards(ThrottlerGuard, SoloJsonGuard)
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
+  @Post('recuperar')
+  @HttpCode(202)
+  recuperar(@Body() body: unknown) { return this.recuperacion.recuperar(body); }
+
+  @Publico()
+  @UseGuards(ThrottlerGuard, SoloJsonGuard)
+  @Post('restablecer')
+  @HttpCode(204)
+  restablecer(@Body() body: unknown) { return this.recuperacion.restablecer(body); }
 
   @Post('logout')
   @HttpCode(204)

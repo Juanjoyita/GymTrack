@@ -6,3 +6,4 @@ export * from './validacion/auth';
 export * from './validacion/serie';
 export * from './validacion/entrenamiento';
 export * from './validacion/ejercicio';
+export * from './validacion/cuenta';
