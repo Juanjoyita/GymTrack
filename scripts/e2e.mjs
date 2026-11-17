@@ -16,15 +16,22 @@ if (!existsSync(config)) {
   process.exitCode = 1;
 } else {
   const isWindows = process.platform === 'win32';
+  const backendBuild = spawnSync(isWindows ? 'npm.cmd' : 'npm', ['run', 'build', '--workspace', '@gymtrack/backend'], {
+    cwd: root,
+    env: { ...process.env, NODE_ENV: 'production' },
+    stdio: 'inherit',
+    shell: isWindows,
+  });
   const build = spawnSync(isWindows ? 'npm.cmd' : 'npm', ['run', 'build', '--workspace', '@gymtrack/frontend'], {
     cwd: root,
-    env: process.env,
+    env: { ...process.env, NODE_ENV: 'production' },
     stdio: 'inherit',
     shell: isWindows,
   });
   if (build.error) throw build.error;
-  if (build.status !== 0) {
-    process.exitCode = build.status ?? 1;
+  if (backendBuild.error) throw backendBuild.error;
+  if (build.status !== 0 || backendBuild.status !== 0) {
+    process.exitCode = build.status !== 0 ? (build.status ?? 1) : (backendBuild.status ?? 1);
   } else {
     const cli = fileURLToPath(new URL('../node_modules/playwright/cli.js', import.meta.url));
     const result = spawnSync(process.execPath, [cli, 'test', '--config', config, ...process.argv.slice(2)], {
@@ -33,6 +40,7 @@ if (!existsSync(config)) {
         ...process.env,
         NODE_ENV: 'test',
         GYMTRACK_E2E: '1',
+        GYMTRACK_E2E_BUILT: '1',
         NODE_EXTRA_CA_CERTS: ca,
         JWT_SECRET: randomBytes(32).toString('base64url'),
       },

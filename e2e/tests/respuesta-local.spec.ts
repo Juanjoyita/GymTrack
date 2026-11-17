@@ -1,4 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import type { DataSource } from 'typeorm';
 import {
   conectarBaseRegistro,
@@ -77,6 +79,9 @@ test('confirma una serie y mide su respuesta visual local sin esperar la API', a
   await medicion.dispose();
 
   if (typeof milisegundos !== 'number') throw new Error('No se observó el render local tras confirmar la serie.');
+  const salida = resolve(__dirname, '../../test-results/perf/respuesta-local.json');
+  mkdirSync(resolve(salida, '..'), { recursive: true });
+  writeFileSync(salida, `${JSON.stringify({ responseLocalMs: milisegundos }, null, 2)}\n`);
   expect(milisegundos).toBeLessThan(100);
   console.log(`Respuesta visual local al confirmar serie: ${milisegundos?.toFixed(1)} ms`);
 });

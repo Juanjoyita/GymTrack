@@ -70,9 +70,11 @@ async function waitFor(url, expected, servers) {
 }
 
 async function main() {
-  const buildEnv = { ...process.env, NODE_ENV: 'production' };
-  run(npm, ['run', 'build', '--workspace', '@gymtrack/frontend'], buildEnv);
-  run(npm, ['run', 'build', '--workspace', '@gymtrack/backend'], buildEnv);
+  if (process.env.GYMTRACK_E2E_BUILT !== '1') {
+    const buildEnv = { ...process.env, NODE_ENV: 'production' };
+    run(npm, ['run', 'build', '--workspace', '@gymtrack/backend'], buildEnv);
+    run(npm, ['run', 'build', '--workspace', '@gymtrack/frontend'], buildEnv);
+  }
 
   const env = {
     ...process.env,

@@ -17,6 +17,7 @@
     "dev": "node scripts/dev.mjs",
     "db:migrate": "npm run db:migrate --workspace backend",
     "db:migrate:test": "npm run db:migrate:test --workspace backend",
+    "db:seed:carga": "npm run db:seed:carga --workspace backend",
     "test:backend": "npm run test --workspace backend",
     "test:domain": "npm run test --workspace @gymtrack/domain",
     "test:frontend": "npm run test --workspace @gymtrack/frontend",

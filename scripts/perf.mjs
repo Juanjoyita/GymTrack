@@ -1,6 +1,6 @@
 import { spawn, spawnSync } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -26,6 +26,11 @@ const isWindows = process.platform === 'win32';
 const npm = isWindows ? 'npm.cmd' : 'npm';
 const outputDirectory = resolve(root, 'test-results/perf');
 mkdirSync(outputDirectory, { recursive: true });
+const consultaPath = resolve(outputDirectory, 'consultas-500.json');
+const respuestaPath = resolve(outputDirectory, 'respuesta-local.json');
+for (const path of [consultaPath, respuestaPath]) {
+  if (existsSync(path)) unlinkSync(path);
+}
 
 function run(command, args, options = {}) {
   const result = spawnSync(command, args, {
@@ -95,6 +100,9 @@ async function main() {
   }
   console.log(`Chrome: ${chromeVersion.stdout.trim()}`);
 
+  run(npm, ['run', 'db:seed:carga', '--workspace', '@gymtrack/backend'], {
+    env: { ...process.env, NODE_ENV: 'test' },
+  });
   const buildEnv = { ...process.env, NODE_ENV: 'production' };
   run(npm, ['run', 'build', '--workspace', '@gymtrack/frontend'], { env: buildEnv });
   run(npm, ['run', 'build', '--workspace', '@gymtrack/backend'], { env: buildEnv });
@@ -142,25 +150,73 @@ async function main() {
       console.log(`Primera carga interactiva ${runNumber}/5: ${(interactive / 1000).toFixed(2)} s`);
     }
 
+    const playwrightCli = resolve(root, 'node_modules/playwright/cli.js');
+    let falloPlaywright;
+    try {
+      run(process.execPath, [
+        playwrightCli,
+        'test',
+        '--config=e2e/lighthouse/playwright.config.ts',
+      ], { env });
+    } catch (error) {
+      falloPlaywright = error;
+    }
+
+    const medicionConsultas = existsSync(consultaPath) ? JSON.parse(readFileSync(consultaPath, 'utf8')) : null;
+    const medicionRespuesta = existsSync(respuestaPath) ? JSON.parse(readFileSync(respuestaPath, 'utf8')) : null;
     const passingLoads = firstLoads.filter((milliseconds) => milliseconds < 3000).length;
     const summary = {
+      date: new Date().toISOString(),
+      node: process.version,
       chrome: chromeVersion.stdout.trim(),
-      profile: { viewport: '360x800', cpuSlowdown: 4, downloadMbps: 10, uploadMbps: 5, latencyMs: 100 },
+      profile: { viewport: '360x800', cpuSlowdown: 4, downloadMbps: 10, uploadMbps: 5, latencyMs: 100, cache: 'vacía por ejecución' },
       firstInteractiveMs: firstLoads,
       passingLoads,
-      responseLocalTargetMs: 100,
+      responseLocalMs: medicionRespuesta?.responseLocalMs ?? null,
+      sessionCount: medicionConsultas?.sessionCount ?? null,
+      history500Ms: medicionConsultas?.historyMs ?? null,
+      progress500Ms: medicionConsultas?.progressMs ?? null,
     };
     const summaryPath = resolve(outputDirectory, 'summary.json');
     writeFileSync(summaryPath, `${JSON.stringify(summary, null, 2)}\n`);
-    console.log(`Primera carga <3 s: ${passingLoads}/5; evidencia: ${summaryPath}`);
-    if (passingLoads < 4) throw new Error('No se alcanzó el umbral de primera carga interactiva (<3 s en 4/5).');
-
-    const playwrightCli = resolve(root, 'node_modules/playwright/cli.js');
-    run(process.execPath, [
-      playwrightCli,
-      'test',
-      '--config=e2e/lighthouse/playwright.config.ts',
-    ], { env });
+    const interactiveRows = firstLoads.map((ms, index) => `| ${index + 1} | ${ms.toFixed(2)} | ${ms < 3000 ? 'PASS' : 'FAIL'} |`);
+    const pasaCarga = passingLoads >= 4;
+    const pasaRespuesta = Number.isFinite(summary.responseLocalMs) && summary.responseLocalMs < 100;
+    const pasaHistorial = summary.sessionCount === 500 && Number.isFinite(summary.history500Ms) && summary.history500Ms < 2000;
+    const pasaProgreso = summary.sessionCount === 500 && Number.isFinite(summary.progress500Ms) && summary.progress500Ms < 2000;
+    const estado = pasaCarga && pasaRespuesta && pasaHistorial && pasaProgreso && !falloPlaywright ? 'PASS' : 'FAIL';
+    const informe = [
+      '# Rendimiento',
+      '',
+      `Fecha de ejecución (UTC): ${summary.date}.`,
+      `Entorno: Windows, Node ${summary.node}, ${summary.chrome}; viewport 360×800, CPU 4×, descarga/subida 10/5 Mbps, latencia 100 ms y caché vacía.`,
+      '',
+      '## Primera carga interactiva Lighthouse',
+      '',
+      '| Ejecución | ms | Umbral <3000 ms |',
+      '|---:|---:|:---:|',
+      ...interactiveRows,
+      '',
+      `Resultado: ${passingLoads}/5 bajo 3000 ms (requerido: al menos 4/5) — **${pasaCarga ? 'PASS' : 'FAIL'}**.`,
+      '',
+      '## Respuesta visual y consultas API',
+      '',
+      '| Medición | Resultado | Umbral | Estado |',
+      '|---|---:|---:|:---:|',
+      `| Respuesta visual local | ${summary.responseLocalMs === null ? 'No medida' : `${summary.responseLocalMs.toFixed(2)} ms`} | <100 ms | ${pasaRespuesta ? 'PASS' : 'FAIL'} |`,
+      `| Historial (${summary.sessionCount ?? 'No medido'} entrenamientos) | ${summary.history500Ms === null ? 'No medido' : `${summary.history500Ms.toFixed(2)} ms`} | <2000 ms | ${pasaHistorial ? 'PASS' : 'FAIL'} |`,
+      `| Progreso (${summary.sessionCount ?? 'No medido'} entrenamientos) | ${summary.progress500Ms === null ? 'No medido' : `${summary.progress500Ms.toFixed(2)} ms`} | <2000 ms | ${pasaProgreso ? 'PASS' : 'FAIL'} |`,
+      '',
+      `Resultado global: **${estado}**.`,
+      `Evidencia detallada: \`test-results/perf/summary.json\`, cinco informes Lighthouse y mediciones E2E.`,
+      '',
+    ].join('\n');
+    writeFileSync(resolve(root, 'e2e/resultados/rendimiento.md'), informe);
+    console.log(`Primera carga <3 s: ${passingLoads}/5; historial/progreso/acción local: ${summaryPath}`);
+    if (estado !== 'PASS') {
+      if (falloPlaywright) throw falloPlaywright;
+      throw new Error('No se cumplieron todos los umbrales de rendimiento; consulta e2e/resultados/rendimiento.md.');
+    }
   } finally {
     await stopServers(servers);
   }

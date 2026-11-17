@@ -3,7 +3,7 @@ import { resolve } from 'node:path';
 
 export default defineConfig({
   testDir: '../tests',
-  testMatch: 'respuesta-local.spec.ts',
+  testMatch: ['respuesta-local.spec.ts', 'rendimiento-500.spec.ts'],
   fullyParallel: false,
   workers: 1,
   retries: 0,
