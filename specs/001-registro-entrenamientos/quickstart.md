@@ -110,6 +110,12 @@ npm run lint && npm run typecheck
 npm run perf              # Lighthouse 5 veces sobre el build de producción (entorno de la constitución)
 ```
 
+`npm run db:seed:carga` crea de forma reproducible 500 entrenamientos y 1500 series sintéticas
+para una cuenta dedicada, únicamente en desarrollo o pruebas. Repetirlo reemplaza solo los datos
+de esa cuenta. En pruebas, ejecuta `NODE_ENV=test npm run db:seed:carga --workspace backend`;
+la ejecución con `NODE_ENV=production` se rechaza. `npm run perf` prepara esta carga en
+`gymtrack_test` y mide también las consultas de historial y progreso.
+
 `npm run perf` construye y sirve el build de producción por HTTPS, aplica el perfil de
 Chrome estable a 360×800, CPU 4× y red 10/5 Mbps con 100 ms, y mide cinco cargas frías
 además de la respuesta visual local al confirmar una serie. Los informes detallados quedan

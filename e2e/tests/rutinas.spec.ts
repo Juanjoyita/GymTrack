@@ -80,12 +80,13 @@ test('crea y edita rutinas ordenadas, inicia sesiones independientes y confirma 
     'SELECT ejercicio_id FROM rutina_ejercicio WHERE rutina_id=$1 ORDER BY posicion',
     [rutina.id],
   )).toEqual(primerOrden.map(({ id }) => ({ ejercicio_id: id })));
-  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+  expect((await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21aa']).analyze()).violations).toEqual([]);
   await page.keyboard.press('Tab');
   await expect(page.locator(':focus')).toBeVisible();
 
   await page.getByRole('button', { name: new RegExp(`iniciar.*Rutina Zeta T051`, 'i') }).click();
   await expect(page.getByRole('heading', { name: /entrenamiento en curso/i })).toBeVisible();
+  expect((await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21aa']).analyze()).violations).toEqual([]);
   const [sesion] = await source.query<Array<{ id: string; version: number }>>(
     'SELECT id,version FROM entrenamiento WHERE usuario_id=$1 AND estado=$2',
     [usuario.id, 'en_curso'],
@@ -111,11 +112,13 @@ test('crea y edita rutinas ordenadas, inicia sesiones independientes y confirma 
 
   await page.goto('/rutinas');
   await page.getByRole('button', { name: /editar.*Rutina Zeta T051/i }).click();
+  expect((await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21aa']).analyze()).violations).toEqual([]);
   const ejerciciosNuevos = [ejercicios[1], ejercicios[3]];
   await page.getByRole('checkbox', { name: ejercicios[2].nombre, exact: true }).uncheck();
   await page.getByRole('checkbox', { name: ejercicios[0].nombre, exact: true }).uncheck();
   await page.getByRole('checkbox', { name: ejercicios[3].nombre, exact: true }).check();
   await page.getByRole('button', { name: /guardar rutina/i }).click();
+  await expect(page.getByRole('heading', { name: /^rutinas$/i })).toBeVisible();
   expect(await source.query(
     'SELECT ejercicio_id FROM rutina_ejercicio WHERE rutina_id=$1 ORDER BY posicion',
     [rutina.id],
@@ -129,6 +132,7 @@ test('crea y edita rutinas ordenadas, inicia sesiones independientes y confirma 
   await page.getByRole('button', { name: /eliminar.*Rutina Zeta T051/i }).click();
   const dialogo = page.getByRole('dialog');
   await expect(dialogo.getByRole('button', { name: /cancelar/i })).toBeFocused();
+  expect((await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21aa']).analyze()).violations).toEqual([]);
   await dialogo.getByRole('button', { name: /eliminar rutina/i }).click();
   await expect(page.getByRole('heading', { name: 'Rutina Zeta T051', exact: true })).toHaveCount(0);
   expect(await source.query('SELECT id FROM entrenamiento WHERE id=$1', [sesion.id])).toHaveLength(1);
@@ -137,4 +141,57 @@ test('crea y edita rutinas ordenadas, inicia sesiones independientes y confirma 
      WHERE er.entrenamiento_id=$1 ORDER BY er.posicion`,
     [sesion.id],
   )).toEqual(primerOrden.map(({ id }) => ({ id })).concat([{ id: ejercicios[3].id }]));
+});
+
+test('V11: elimina en cascada una cuenta que tiene rutina, entrenamiento y series', async ({ page }) => {
+  await entrar(page);
+  await page.goto('/rutinas');
+  await crearRutina(page, 'Rutina cascada T056', 2, ejercicios.slice(0, 3).map(({ nombre }) => nombre));
+  await page.getByRole('button', { name: /iniciar.*Rutina cascada T056/i }).click();
+  await expect(page.getByRole('heading', { name: /entrenamiento en curso/i })).toBeVisible();
+  const [sesion] = await source.query<Array<{ id: string }>>(
+    'SELECT id FROM entrenamiento WHERE usuario_id=$1 AND estado=$2',
+    [usuario.id, 'en_curso'],
+  );
+  const [realizado] = await source.query<Array<{ id: string }>>(
+    'SELECT id FROM ejercicio_realizado WHERE entrenamiento_id=$1 ORDER BY posicion LIMIT 1',
+    [sesion.id],
+  );
+  await source.query(
+    `INSERT INTO serie (id,ejercicio_realizado_id,orden,repeticiones,peso_kg,registrada_en)
+     VALUES ($1,$2,1,8,60,now())`,
+    [randomUUID(), realizado.id],
+  );
+
+  const [antes] = await source.query<Array<{ rutinas: number; entrenamientos: number; series: number }>>(
+    `SELECT
+       (SELECT count(*)::int FROM rutina WHERE usuario_id=$1) AS rutinas,
+       (SELECT count(*)::int FROM entrenamiento WHERE usuario_id=$1) AS entrenamientos,
+       (SELECT count(*)::int FROM serie s
+         JOIN ejercicio_realizado er ON er.id=s.ejercicio_realizado_id
+         JOIN entrenamiento t ON t.id=er.entrenamiento_id WHERE t.usuario_id=$1) AS series`,
+    [usuario.id],
+  );
+  expect(antes).toEqual({ rutinas: 1, entrenamientos: 1, series: 1 });
+
+  await page.getByRole('link', { name: /^cuenta$/i }).click();
+  await page.getByRole('button', { name: /^eliminar cuenta$/i }).click();
+  const dialogo = page.getByRole('dialog');
+  await dialogo.getByLabel(/contraseña/i).fill(contrasena);
+  await dialogo.getByRole('button', { name: /confirmar|eliminar definitivamente/i }).click();
+  await expect(page.getByRole('heading', { name: /^iniciar sesión$/i })).toBeVisible();
+
+  const [despues] = await source.query<Array<{ usuarios: number; rutinas: number; entrenamientos: number; ejercicios: number; series: number }>>(
+    `SELECT
+       (SELECT count(*)::int FROM usuario WHERE id=$1) AS usuarios,
+       (SELECT count(*)::int FROM rutina WHERE usuario_id=$1) AS rutinas,
+       (SELECT count(*)::int FROM entrenamiento WHERE usuario_id=$1) AS entrenamientos,
+       (SELECT count(*)::int FROM ejercicio_realizado er
+         JOIN entrenamiento t ON t.id=er.entrenamiento_id WHERE t.usuario_id=$1) AS ejercicios,
+       (SELECT count(*)::int FROM serie s
+         JOIN ejercicio_realizado er ON er.id=s.ejercicio_realizado_id
+         JOIN entrenamiento t ON t.id=er.entrenamiento_id WHERE t.usuario_id=$1) AS series`,
+    [usuario.id],
+  );
+  expect(despues).toEqual({ usuarios: 0, rutinas: 0, entrenamientos: 0, ejercicios: 0, series: 0 });
 });
