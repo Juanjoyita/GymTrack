@@ -138,7 +138,7 @@ Una prueba de aceptación debe ejecutarse y fallar por el comportamiento ausente
 
 ### Verificación integrada
 
-- [ ] T050 [US4] Ejecutar V10 en `e2e/tests/cuenta.spec.ts` y `e2e/resultados/us4.md` — I4; depende: T049; comprobar: T044 verde, inspección de archivos descargados, Mailpit solo recibe para registrado, enlaces usados/caducados rechazados, sesiones anteriores invalidadas; axe y revisión de teclado/foco pasan.
+- [X] T050 [US4] Ejecutar V10 en `e2e/tests/cuenta.spec.ts` y `e2e/resultados/us4.md` — I4; depende: T049; comprobar: T044 verde, inspección de archivos descargados, Mailpit solo recibe para registrado, enlaces usados/caducados rechazados, sesiones anteriores invalidadas; axe y revisión de teclado/foco pasan.
 
 ## Fase 7 — US5 / P5: Rutinas por día
 
@@ -146,7 +146,7 @@ Una prueba de aceptación debe ejecutarse y fallar por el comportamiento ausente
 
 ### Aceptación primero
 
-- [ ] T051 [US5] Escribir aceptación roja en `backend/test/integracion/rutinas.e2e-spec.ts` y `e2e/tests/rutinas.spec.ts` — I4; depende: T050; comprobar: rojo para CRUD privado, día 1–7, lista no vacía/ordenada, inicio desde rutina y no propagación de cambios/borrado en ninguna dirección.
+- [X] T051 [US5] Escribir aceptación roja en `backend/test/integracion/rutinas.e2e-spec.ts` y `e2e/tests/rutinas.spec.ts` — I4; depende: T050; comprobar: rojo para CRUD privado, día 1–7, lista no vacía/ordenada, inicio desde rutina y no propagación de cambios/borrado en ninguna dirección.
 
 ### Implementación
 
