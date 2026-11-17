@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { ErrorApi, ErrorRed } from '../api/cliente';
-import { cerrarSesion, iniciarSesion, obtenerSesion, registrarse, type Credenciales, type Usuario } from '../api/auth';
+import { cerrarSesion, iniciarSesion, obtenerSesion, registrarse, restablecerContrasena, type Credenciales, type Usuario } from '../api/auth';
+import { actualizarPreferencias } from '../api/cuenta';
 
 export const CLAVE_SESION = ['sesion'] as const;
 
@@ -52,6 +53,19 @@ function limpiarDatosDeUsuario(cliente: QueryClient) {
   for (const limpiar of limpiezas) limpiar();
 }
 
+/**
+ * Cuenta eliminada (T049): olvida la sesión y la caché como al cerrar sesión y, después (al quitar las
+ * consultas se vuelve a guardar la copia local), borra todo lo guardado en el navegador para ese
+ * usuario (`gymtrack:*:<id>`). Los datos de otros usuarios del mismo navegador no se tocan.
+ */
+export function olvidarCuenta(cliente: QueryClient, usuarioId: string) {
+  establecerUsuario(cliente, null);
+  try {
+    const claves = Array.from({ length: localStorage.length }, (_, i) => localStorage.key(i) ?? '');
+    for (const clave of claves) if (clave.startsWith('gymtrack:') && clave.endsWith(`:${usuarioId}`)) localStorage.removeItem(clave);
+  } catch { /* Sin almacenamiento disponible: no hay nada que borrar. */ }
+}
+
 function establecerUsuario(cliente: QueryClient, usuario: Usuario | null) {
   limpiarDatosDeUsuario(cliente);
   recordarSesion(usuario);
@@ -80,6 +94,34 @@ export function useRegistrarse() {
     mutationFn: (credenciales: Credenciales) => registrarse({ ...credenciales, zonaHoraria: Intl.DateTimeFormat().resolvedOptions().timeZone }),
     meta: META_ACCESO,
     onSuccess: (usuario) => establecerUsuario(cliente, usuario),
+  });
+}
+
+/**
+ * Cambia la unidad de peso (FR-024). Es el mismo usuario: se actualizan la sesión y la sesión recordada
+ * sin borrar sus datos en caché; las pantallas convierten al mostrar y los pesos guardados no cambian.
+ */
+export function useActualizarPreferencias() {
+  const cliente = useQueryClient();
+  return useMutation({
+    mutationFn: actualizarPreferencias,
+    onSuccess: (usuario) => {
+      recordarSesion(usuario);
+      cliente.setQueryData(CLAVE_SESION, usuario);
+    },
+  });
+}
+
+/**
+ * Restablece la contraseña. El servidor cierra todas las sesiones, así que la de este navegador
+ * (si la hubiera) se olvida igual que al cerrar sesión.
+ */
+export function useRestablecerContrasena() {
+  const cliente = useQueryClient();
+  return useMutation({
+    mutationFn: restablecerContrasena,
+    meta: META_ACCESO,
+    onSuccess: () => establecerUsuario(cliente, null),
   });
 }
 

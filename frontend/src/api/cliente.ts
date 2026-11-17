@@ -72,6 +72,33 @@ async function leerJson(respuesta: Response): Promise<unknown> {
   }
 }
 
+function errorDeRespuesta(status: number, cuerpo: unknown) {
+  return new ErrorApi(status, esCuerpoError(cuerpo)
+    ? { codigo: cuerpo.codigo, mensaje: cuerpo.mensaje, campos: cuerpo.campos ?? null, actual: cuerpo.actual ?? null }
+    : { codigo: 'ERROR_HTTP', mensaje: textos.errores.generico, campos: null, actual: null });
+}
+
+/** Nombre del fichero de `Content-Disposition: attachment; filename="…"`, sin rutas. */
+function nombreDeFichero(cabecera: string | null) {
+  const nombre = /filename="?([^";]+)"?/i.exec(cabecera ?? '')?.[1];
+  return nombre?.split(/[\\/]/).pop() || null;
+}
+
+/**
+ * Descarga un fichero de la API (no JSON) con la sesión de la cookie, como `solicitar`: los errores
+ * son ErrorApi o ErrorRed y el fichero no se guarda en ningún almacenamiento del cliente.
+ */
+export async function descargar(ruta: string): Promise<{ contenido: Blob; nombre: string | null }> {
+  let respuesta: Response;
+  try {
+    respuesta = await fetch(`${BASE_API}${ruta}`, { credentials: 'include', cache: 'no-store' });
+  } catch {
+    throw new ErrorRed();
+  }
+  if (!respuesta.ok) throw errorDeRespuesta(respuesta.status, await leerJson(respuesta));
+  return { contenido: await respuesta.blob(), nombre: nombreDeFichero(respuesta.headers.get('Content-Disposition')) };
+}
+
 /**
  * Hace una petición JSON a la API. La sesión viaja en la cookie httpOnly (research R-03),
  * por eso se envía siempre `credentials: 'include'` y nunca se guarda ningún token en el cliente.
@@ -96,11 +123,7 @@ export async function solicitar<T = unknown>(ruta: string, opciones: OpcionesSol
   }
 
   const cuerpo = await leerJson(respuesta);
-  if (!respuesta.ok) {
-    throw new ErrorApi(respuesta.status, esCuerpoError(cuerpo)
-      ? { codigo: cuerpo.codigo, mensaje: cuerpo.mensaje, campos: cuerpo.campos ?? null, actual: cuerpo.actual ?? null }
-      : { codigo: 'ERROR_HTTP', mensaje: textos.errores.generico, campos: null, actual: null });
-  }
+  if (!respuesta.ok) throw errorDeRespuesta(respuesta.status, cuerpo);
   const metodo = opciones.method ?? 'GET';
   if (metodo !== 'GET') for (const oyente of oyentesEscritura) oyente({ metodo, ruta });
   return cuerpo as T;

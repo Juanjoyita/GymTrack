@@ -27,3 +27,11 @@ export const registrarse = (datos: Credenciales & { zonaHoraria: string }) =>
   solicitar<Usuario>('/auth/registro', { method: 'POST', cuerpo: datos });
 
 export const cerrarSesion = () => solicitar<void>('/auth/logout', { method: 'POST' });
+
+/** Pide el enlace de recuperación (FR-001). Responde siempre igual, exista o no la cuenta. */
+export const solicitarRecuperacion = (email: string) =>
+  solicitar<{ mensaje: string }>('/auth/recuperar', { method: 'POST', cuerpo: { email } });
+
+/** Cambia la contraseña con el token del enlace (válido 1 h y un solo uso). 410 si no sirve. */
+export const restablecerContrasena = (datos: { token: string; contrasenaNueva: string }) =>
+  solicitar<void>('/auth/restablecer', { method: 'POST', cuerpo: datos });

@@ -45,6 +45,10 @@ export const IconoTrofeo = (p: PropsIcono) => (
   <Icono {...p}><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0V4Z" /><path d="M17 5h3v2a3 3 0 0 1-3 3M7 5H4v2a3 3 0 0 0 3 3" /></Icono>
 );
 
+export const IconoDescarga = (p: PropsIcono) => (
+  <Icono {...p}><path d="M12 4v11M7 10l5 5 5-5M5 20h14" /></Icono>
+);
+
 export const IconoCheck = (p: PropsIcono) => (
   <Icono {...p}><path d="m5 12 5 5 9-10" /></Icono>
 );

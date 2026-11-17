@@ -1,4 +1,4 @@
-import { esquemaSerie, redondearPesoParaMostrar } from '@gymtrack/domain';
+import { esquemaSerie, kgALb, redondearPesoParaMostrar } from '@gymtrack/domain';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState, type FormEvent } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
@@ -15,13 +15,17 @@ import { Campo } from '../../componentes/Campo';
 import { CampoArea } from '../../componentes/CampoArea';
 import { Dialogo } from '../../componentes/Dialogo';
 import { FOCO_VISIBLE } from '../../componentes/estilos';
+import { useSesion } from '../../app/sesion';
 import { useTituloDocumento } from '../../app/useTituloDocumento';
 import { textos } from '../../textos/es';
 
 const t = textos.historial;
 const ts = textos.entrenar.serie;
 const numero = new Intl.NumberFormat('es', { maximumFractionDigits: 2 });
-const formatoPeso = (kg: number) => `${numero.format(redondearPesoParaMostrar(kg))} kg`;
+type Unidad = 'kg' | 'lb';
+// T049 (FR-024): los pesos se guardan en kg y se muestran en la unidad del usuario.
+const enUnidad = (kg: number, unidad: Unidad) => redondearPesoParaMostrar(unidad === 'kg' ? kg : kgALb(kg));
+const formatoPeso = (kg: number, unidad: Unidad) => `${numero.format(enUnidad(kg, unidad))} ${unidad}`;
 
 function mensajeError(error: unknown) {
   return error instanceof Error ? `${t.errorGuardado} ${error.message}` : t.errorGuardado;
@@ -29,6 +33,7 @@ function mensajeError(error: unknown) {
 
 export function PaginaDetalleHistorial() {
   const { id = '' } = useParams();
+  const unidad = useSesion().data?.unidadPeso ?? 'kg';
   const navigate = useNavigate();
   const [parametros] = useSearchParams();
   const cliente = useQueryClient();
@@ -102,7 +107,7 @@ export function PaginaDetalleHistorial() {
       <header className="flex flex-col gap-3">
         <h1 id="titulo-detalle" tabIndex={-1} className="font-display text-3xl font-bold text-white">{t.detalle}</h1>
         <p className="text-slate-300">{new Intl.DateTimeFormat('es', { dateStyle: 'long', timeZone: entrenamiento.zonaHoraria }).format(new Date(entrenamiento.inicio))}</p>
-        <p className="text-slate-300">{entrenamiento.resumen.duracionMin} min · {entrenamiento.resumen.ejercicios} {entrenamiento.resumen.ejercicios === 1 ? 'ejercicio' : 'ejercicios'} · {entrenamiento.resumen.series} {entrenamiento.resumen.series === 1 ? 'serie' : 'series'} · {formatoPeso(entrenamiento.resumen.volumenKg)}</p>
+        <p className="text-slate-300">{entrenamiento.resumen.duracionMin} min · {entrenamiento.resumen.ejercicios} {entrenamiento.resumen.ejercicios === 1 ? 'ejercicio' : 'ejercicios'} · {entrenamiento.resumen.series} {entrenamiento.resumen.series === 1 ? 'serie' : 'series'} · {formatoPeso(entrenamiento.resumen.volumenKg, unidad)}</p>
       </header>
 
       <div className="flex flex-col gap-4">
@@ -115,13 +120,13 @@ export function PaginaDetalleHistorial() {
                   {ejercicio.series.map((s, index) => (
                     <li key={s.id} className="flex flex-wrap items-center gap-2 py-2 pl-3 pr-1">
                       <span className="w-16 shrink-0 text-sm font-semibold text-slate-400">{ts.titulo(index + 1)}</span>
-                      <span className="flex-1 font-display text-lg font-bold text-white">{formatoPeso(s.pesoKg)} × {s.repeticiones}</span>
+                      <span className="flex-1 font-display text-lg font-bold text-white">{formatoPeso(s.pesoKg, unidad)} × {s.repeticiones}</span>
                       <Boton variante="secundario" className="min-h-11 px-3" aria-label={ts.editar(index + 1)}
                         onClick={() => serieFormId === s.id ? setSerieFormId(null) : setSerieFormId(s.id)}>
                         {ts.editar(index + 1)}
                       </Boton>
                       {serieFormId === s.id && (
-                        <FormularioSerie key={`${s.id}-${s.version}`} serie={s} onCancelar={() => setSerieFormId(null)}
+                        <FormularioSerie key={`${s.id}-${s.version}`} serie={s} unidad={unidad} onCancelar={() => setSerieFormId(null)}
                           onGuardar={(pesoEntrada, repeticiones) => {
                             serie.mutate({ ejercicioId: ejercicio.id, serieId: s.id, datos: { pesoEntrada, repeticiones, version: s.version } });
                             setSerieFormId(null);
@@ -185,10 +190,10 @@ function NotaEjercicio({ ejercicio, cargando, onGuardar }: {
   );
 }
 
-function FormularioSerie({ serie, onCancelar, onGuardar }: {
-  serie: Serie; onCancelar: () => void; onGuardar: (peso: { valor: number; unidad: 'kg' | 'lb' }, repeticiones: number) => void;
+function FormularioSerie({ serie, unidad, onCancelar, onGuardar }: {
+  serie: Serie; unidad: Unidad; onCancelar: () => void; onGuardar: (peso: { valor: number; unidad: 'kg' | 'lb' }, repeticiones: number) => void;
 }) {
-  const [peso, setPeso] = useState(String(redondearPesoParaMostrar(serie.pesoKg)));
+  const [peso, setPeso] = useState(String(enUnidad(serie.pesoKg, unidad)));
   const [repeticiones, setRepeticiones] = useState(String(serie.repeticiones));
   const [error, setError] = useState('');
 
@@ -196,19 +201,19 @@ function FormularioSerie({ serie, onCancelar, onGuardar }: {
     evento.preventDefault();
     const valor = Number(peso.trim().replace(',', '.'));
     const reps = Number(repeticiones.trim());
-    const resultado = esquemaSerie.safeParse({ repeticiones: reps, pesoEntrada: { valor, unidad: 'kg' } });
+    const resultado = esquemaSerie.safeParse({ repeticiones: reps, pesoEntrada: { valor, unidad } });
     if (!resultado.success) {
       setError(resultado.error.issues[0]?.path[0] === 'repeticiones' ? ts.errorRepeticiones : ts.errorPeso);
       return;
     }
     setError('');
-    onGuardar({ valor, unidad: 'kg' }, reps);
+    onGuardar({ valor, unidad }, reps);
   }
 
   return (
     <form noValidate onSubmit={guardar} className="flex w-full flex-col gap-3 py-2">
       <div className="grid grid-cols-2 gap-3">
-        <Campo etiqueta={ts.peso('kg')} inputMode="decimal" value={peso} onChange={(evento) => setPeso(evento.target.value)} />
+        <Campo etiqueta={ts.peso(unidad)} inputMode="decimal" value={peso} onChange={(evento) => setPeso(evento.target.value)} />
         <Campo etiqueta={ts.repeticiones} inputMode="numeric" value={repeticiones} onChange={(evento) => setRepeticiones(evento.target.value)} />
       </div>
       {error && <p role="alert" className="text-sm text-red-300">{error}</p>}
