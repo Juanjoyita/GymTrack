@@ -40,11 +40,8 @@ const SECCIONES = [
   { ruta: '/cuenta', nombre: textos.navegacion.cuenta },
 ];
 
-// Secciones que aún son marcadores «Próximamente».
-// Progreso dejó de ser marcador en T040 y Cuenta en T049.
-const RUTA_POR_SECCION = {
-  rutinas: '/rutinas',
-};
+// Ya no quedan secciones «Próximamente»: Entrenar (T025), Historial, Progreso (T040), Cuenta (T049) y
+// Rutinas (T055) tienen su pantalla, cada una con sus propias pruebas.
 
 describe('shell móvil', () => {
   it('ofrece un enlace para saltar al contenido como primer elemento enfocable', async () => {
@@ -86,15 +83,6 @@ describe('shell móvil', () => {
     expect(await screen.findByText(textos.historial.sinResultados)).toBeInTheDocument();
     expect(screen.getByRole('link', { name: textos.historial.registrarPasado })).toHaveAttribute('href', '/?registrarPasado=1');
     expect(screen.queryByText(textos.shell.proximamente)).not.toBeInTheDocument();
-  });
-
-  it.each(Object.entries(RUTA_POR_SECCION))('describe el propósito de %s y lo que incluirá', async (clave, ruta) => {
-    const seccion = textos.secciones[clave as keyof typeof textos.secciones];
-    await renderizarEn(ruta);
-
-    expect(screen.getByText(seccion.descripcion)).toBeInTheDocument();
-    const lista = screen.getByRole('list', { name: textos.shell.queIncluira });
-    expect(within(lista).getAllByRole('listitem').map((item) => item.textContent)).toEqual([...seccion.incluira]);
   });
 
   it('los iconos son decorativos y no se anuncian', async () => {

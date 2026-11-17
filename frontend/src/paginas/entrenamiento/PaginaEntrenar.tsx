@@ -21,6 +21,7 @@ import { conPendientes, esFinalizar, opDescartar, opFinalizar, opIniciar, opNota
 import { clavesProgreso, type RecordsPersonales } from '../../api/progreso';
 import { recordsDeSesion, type RecordSesion } from './records';
 import { RegistroPasado } from './RegistroPasado';
+import { RutinasDeHoy } from '../rutinas/RutinasDeHoy';
 import { ResumenFinal, resumenDe, type Resumen } from './ResumenFinal';
 import { textoPeso } from './TarjetaEjercicio';
 
@@ -176,6 +177,8 @@ export function PaginaEntrenar() {
         </div>
         <Boton onClick={iniciar} className="w-full">{t.iniciar}</Boton>
         <Boton variante="secundario" onClick={() => setModo({ tipo: 'registrar-pasado' })} className="w-full">{t.pasado.abrir}</Boton>
+        {/* T055: atajo a las rutinas de hoy, solo sin entrenamiento en curso. */}
+        <RutinasDeHoy />
       </div>
     );
   } else {

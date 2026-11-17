@@ -78,6 +78,14 @@ export const IconoMas = (p: PropsIcono) => (
   <Icono {...p}><path d="M12 5v14M5 12h14" /></Icono>
 );
 
+export const IconoSubir = (p: PropsIcono) => (
+  <Icono {...p}><path d="m6 15 6-6 6 6" /></Icono>
+);
+
+export const IconoBajar = (p: PropsIcono) => (
+  <Icono {...p}><path d="m6 9 6 6 6-6" /></Icono>
+);
+
 export const IconoCerrar = (p: PropsIcono) => (
   <Icono {...p}><path d="M6 6l12 12M18 6 6 18" /></Icono>
 );
