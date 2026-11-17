@@ -46,3 +46,12 @@ export async function obtenerEntrenamientoEnCurso() {
 /** El id lo genera el cliente: repetir la petición no duplica el ejercicio (R-08). */
 export const anadirEjercicioRealizado = (entrenamientoId: string, datos: { id: string; ejercicioId: string; posicion: number }) =>
   solicitar<EjercicioRealizado>(`/entrenamientos/${entrenamientoId}/ejercicios`, { method: 'POST', cuerpo: datos });
+
+/**
+ * Inicia un entrenamiento desde una rutina (FR-029): el servidor copia sus ejercicios en orden, sin
+ * series, con sus propios identificadores. Por eso necesita conexión y no pasa por la cola (T055).
+ */
+export const iniciarDesdeRutina = (rutinaId: string) => solicitar<Entrenamiento>('/entrenamientos', {
+  method: 'POST',
+  cuerpo: { id: crypto.randomUUID(), inicio: new Date().toISOString(), zonaHoraria: Intl.DateTimeFormat().resolvedOptions().timeZone, rutinaId },
+});

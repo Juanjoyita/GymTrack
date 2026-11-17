@@ -2,14 +2,19 @@ import { calcularMetricasProgreso, detectarRecordsPersonales } from '@gymtrack/d
 import { vi } from 'vitest';
 
 // API en memoria con estado según contracts/api.md («Entrenamientos — P1»): guarda, versiona, valida
-// la versión esperada y descarta como el servidor. La usan las pruebas de T027, T028, T041, T042 y T049.
+// la versión esperada y descarta como el servidor. La usan las pruebas de T027, T028, T041, T042, T049 y T055.
 // El progreso y los récords se calculan con el dominio a partir de los entrenamientos finalizados.
 export interface SerieApi { id: string; orden: number; repeticiones: number; pesoKg: number; registradaEn: string; version: number }
 export interface RealizadoApi { id: string; ejercicioId: string; nombre: string; posicion: number; nota: string | null; terminadoEn: string | null; volumenNotificadoKg: number | null; version: number; series: SerieApi[] }
-export interface EntrenamientoApi { id: string; estado: 'en_curso' | 'finalizado'; inicio: string; fin: string | null; zonaHoraria: string; nota: string | null; rutinaOrigenId: null; inactivo: boolean; version: number; ejercicios: RealizadoApi[] }
+export interface EntrenamientoApi { id: string; estado: 'en_curso' | 'finalizado'; inicio: string; fin: string | null; zonaHoraria: string; nota: string | null; rutinaOrigenId: string | null; inactivo: boolean; version: number; ejercicios: RealizadoApi[] }
 
 export const PRESS = { id: '27000000-0000-4000-8000-000000000001', nombre: 'Press de banca', grupoMuscular: 'pecho', propio: false, ultimoUso: null };
 export const SENTADILLA = { id: '27000000-0000-4000-8000-000000000002', nombre: 'Sentadilla', grupoMuscular: 'cuadriceps', propio: false, ultimoUso: null };
+export const REMO = { id: '27000000-0000-4000-8000-000000000003', nombre: 'Remo con barra', grupoMuscular: 'espalda', propio: false, ultimoUso: null };
+const CATALOGO = [PRESS, SENTADILLA, REMO];
+
+/** Rutina como la devuelve la API (contracts/api.md, «Rutinas — P5»). */
+export interface RutinaApi { id: string; nombre: string; diaSemana: number; version: number; ejercicios: { posicion: number; ejercicioId: string; nombre: string }[] }
 
 /** Contraseña de la cuenta de pruebas para DELETE /cuenta (T049). */
 export const CONTRASENA = 'Demo-T049-2026!';
@@ -22,11 +27,11 @@ export const SIN_RECORDS = { sesionesAnteriores: 0, pesoMax: null, unoRm: null, 
  * records: récords fijos por ejercicio (T041; si no hay, se calculan con los finalizados); recordsFallan y
  * progresoFalla: esas consultas responden 500; cuentaFalla: las operaciones de cuenta responden 500.
  */
-export const servidor: { entrenamiento: EntrenamientoApi | null; pasados: EntrenamientoApi[]; ultimas: Record<string, unknown>; records: Record<string, unknown>; recordsFallan?: boolean; progresoFalla?: boolean; cuentaFalla?: boolean; cuentaEliminada?: boolean; sinRed: boolean; ultimaLenta?: Promise<void>; ejercicioLento?: Promise<void>; peticiones: { metodo: string; ruta: string; cuerpo: unknown }[] } = { entrenamiento: null, pasados: [], ultimas: {}, records: {}, sinRed: false, peticiones: [] };
+export const servidor: { entrenamiento: EntrenamientoApi | null; pasados: EntrenamientoApi[]; ultimas: Record<string, unknown>; records: Record<string, unknown>; recordsFallan?: boolean; progresoFalla?: boolean; cuentaFalla?: boolean; cuentaEliminada?: boolean; rutinas: RutinaApi[]; rutinasFallan?: boolean; sinRed: boolean; ultimaLenta?: Promise<void>; ejercicioLento?: Promise<void>; peticiones: { metodo: string; ruta: string; cuerpo: unknown }[] } = { entrenamiento: null, pasados: [], ultimas: {}, records: {}, rutinas: [], sinRed: false, peticiones: [] };
 
 /** Estado inicial para cada prueba: sin entrenamiento, con red y usuario en kg. */
 export function reiniciarServidor() {
-  Object.assign(servidor, { entrenamiento: null, pasados: [], ultimas: {}, records: {}, recordsFallan: false, progresoFalla: false, cuentaFalla: false, cuentaEliminada: false, sinRed: false, ultimaLenta: undefined, ejercicioLento: undefined, peticiones: [] });
+  Object.assign(servidor, { entrenamiento: null, pasados: [], ultimas: {}, records: {}, recordsFallan: false, progresoFalla: false, cuentaFalla: false, cuentaEliminada: false, rutinas: [], rutinasFallan: false, sinRed: false, ultimaLenta: undefined, ejercicioLento: undefined, peticiones: [] });
   usuario.unidadPeso = 'kg';
   usuario.zonaHoraria = 'America/Bogota';
 }
@@ -97,7 +102,37 @@ export function instalarApi() {
       const elementos = [...servidor.pasados].sort((a, b) => b.inicio.localeCompare(a.inicio)).map((e) => ({ id: e.id, inicio: e.inicio, fin: e.fin, zonaHoraria: e.zonaHoraria, resumen: { ...resumen(e), duracionMin: 60 } }));
       return json(200, { elementos, siguienteCursor: null });
     }
-    if (ruta === '/ejercicios') return json(200, [PRESS, SENTADILLA].map(conUltimoUso));
+    if (ruta === '/ejercicios') return json(200, CATALOGO.map(conUltimoUso));
+    if (ruta === '/rutinas' || ruta.startsWith('/rutinas/')) {
+      if (servidor.rutinasFallan) return error500();
+      const noEncontrada = () => json(404, { codigo: 'NO_ENCONTRADO', mensaje: 'Recurso no encontrado.', campos: null, actual: null });
+      const conEjercicios = (ids: string[]) => ids.map((id, i) => ({ posicion: i + 1, ejercicioId: id, nombre: CATALOGO.find((e) => e.id === id)!.nombre }));
+      const idsValidos = (ids: unknown) => Array.isArray(ids) && ids.length > 0 && ids.every((id) => CATALOGO.some((e) => e.id === id));
+      if (ruta === '/rutinas' && metodo === 'GET') {
+        return json(200, [...servidor.rutinas].sort((a, b) => a.diaSemana - b.diaSemana || a.nombre.localeCompare(b.nombre, 'es')));
+      }
+      if (ruta === '/rutinas' && metodo === 'POST') {
+        if (!cuerpo.nombre?.trim() || !(cuerpo.diaSemana >= 1 && cuerpo.diaSemana <= 7)) return json(400, { codigo: 'VALIDACION', mensaje: 'Revisa los campos marcados.', campos: { nombre: 'Obligatorio.' }, actual: null });
+        if (!idsValidos(cuerpo.ejercicioIds)) return noEncontrada();
+        const rutina: RutinaApi = { id: crypto.randomUUID(), nombre: cuerpo.nombre.trim(), diaSemana: cuerpo.diaSemana, version: 1, ejercicios: conEjercicios(cuerpo.ejercicioIds) };
+        servidor.rutinas.push(rutina);
+        return json(201, rutina);
+      }
+      const rutina = servidor.rutinas.find((r) => r.id === ruta.slice('/rutinas/'.length));
+      if (!rutina) return noEncontrada();
+      if (metodo === 'GET') return json(200, rutina);
+      const version = metodo === 'DELETE' ? Number(url.searchParams.get('version')) : cuerpo.version;
+      if (version !== rutina.version) return json(409, { codigo: 'CONFLICTO_VERSION', mensaje: 'La versión del recurso ha cambiado.', campos: null, actual: rutina });
+      if (metodo === 'DELETE') { servidor.rutinas = servidor.rutinas.filter((r) => r !== rutina); return json(204); }
+      if (cuerpo.ejercicioIds !== undefined && !idsValidos(cuerpo.ejercicioIds)) return noEncontrada();
+      Object.assign(rutina, {
+        ...(cuerpo.nombre !== undefined ? { nombre: cuerpo.nombre.trim() } : {}),
+        ...(cuerpo.diaSemana !== undefined ? { diaSemana: cuerpo.diaSemana } : {}),
+        ...(cuerpo.ejercicioIds !== undefined ? { ejercicios: conEjercicios(cuerpo.ejercicioIds) } : {}),
+        version: rutina.version + 1,
+      });
+      return json(200, rutina);
+    }
     const ultima = /^\/ejercicios\/([^/]+)\/ultima-sesion$/.exec(ruta);
     if (ultima) { await servidor.ultimaLenta; return json(200, servidor.ultimas[ultima[1]] ?? null); }
     const records = /^\/progreso\/([^/]+)\/records$/.exec(ruta);
@@ -121,7 +156,13 @@ export function instalarApi() {
     }
     if (metodo === 'POST' && ruta === '/entrenamientos') {
       if (enCurso) return json(409, { codigo: 'ENTRENAMIENTO_EN_CURSO', mensaje: 'Ya hay uno.', campos: null, actual: conResumen(enCurso) });
-      servidor.entrenamiento = { id: cuerpo.id, estado: 'en_curso', inicio: cuerpo.inicio, fin: null, zonaHoraria: cuerpo.zonaHoraria, nota: null, rutinaOrigenId: null, inactivo: false, version: 1, ejercicios: [] };
+      // Desde una rutina (FR-029): copia sus ejercicios en orden, sin series, con identificadores del servidor.
+      const origen = cuerpo.rutinaId ? servidor.rutinas.find((r) => r.id === cuerpo.rutinaId) : undefined;
+      if (cuerpo.rutinaId && !origen) return json(404, { codigo: 'NO_ENCONTRADO', mensaje: 'Recurso no encontrado.', campos: null, actual: null });
+      const ejercicios: RealizadoApi[] = (origen?.ejercicios ?? []).map((e) => ({
+        id: crypto.randomUUID(), ejercicioId: e.ejercicioId, nombre: e.nombre, posicion: e.posicion, nota: null, terminadoEn: null, volumenNotificadoKg: null, version: 1, series: [],
+      }));
+      servidor.entrenamiento = { id: cuerpo.id, estado: 'en_curso', inicio: cuerpo.inicio, fin: null, zonaHoraria: cuerpo.zonaHoraria, nota: null, rutinaOrigenId: origen?.id ?? null, inactivo: false, version: 1, ejercicios };
       return json(201, conResumen(servidor.entrenamiento));
     }
     // Las rutas anidadas valen para el entrenamiento en curso y para los finalizados (FR-010).
@@ -153,7 +194,7 @@ export function instalarApi() {
     }
     if (metodo === 'POST' && ruta === `${base}/ejercicios`) {
       await servidor.ejercicioLento;
-      const ej = [PRESS, SENTADILLA].find((x) => x.id === cuerpo.ejercicioId);
+      const ej = CATALOGO.find((x) => x.id === cuerpo.ejercicioId);
       const r: RealizadoApi = { id: cuerpo.id, ejercicioId: cuerpo.ejercicioId, nombre: ej?.nombre ?? '?', posicion: cuerpo.posicion, nota: null, terminadoEn: null, volumenNotificadoKg: null, version: 1, series: [] };
       e.ejercicios.push(r);
       return json(201, r);

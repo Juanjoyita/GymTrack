@@ -8,6 +8,8 @@ import { PaginaEntrenar } from '../paginas/entrenamiento/PaginaEntrenar';
 import { PaginaDetalleHistorial } from '../paginas/historial/PaginaDetalleHistorial';
 import { PaginaHistorial } from '../paginas/historial/PaginaHistorial';
 import { PaginaProgreso } from '../paginas/progreso/PaginaProgreso';
+import { PaginaEditarRutina, PaginaNuevaRutina } from '../paginas/rutinas/EditorRutina';
+import { PaginaRutinas } from '../paginas/rutinas/PaginaRutinas';
 import { Layout } from './Layout';
 import { NoEncontrada } from './NoEncontrada';
 import { PaginaSeccion } from './PaginaSeccion';
@@ -32,12 +34,14 @@ export const rutas: RouteObject[] = [
       element: <Layout />,
       children: [
         ...SECCIONES.map((seccion) => {
-          const element = seccion.clave === 'entrenar' ? <PaginaEntrenar /> : seccion.clave === 'historial' ? <PaginaHistorial /> : seccion.clave === 'progreso' ? <PaginaProgreso /> : seccion.clave === 'cuenta' ? <PaginaCuenta /> : (
+          const element = seccion.clave === 'entrenar' ? <PaginaEntrenar /> : seccion.clave === 'historial' ? <PaginaHistorial /> : seccion.clave === 'progreso' ? <PaginaProgreso /> : seccion.clave === 'cuenta' ? <PaginaCuenta /> : seccion.clave === 'rutinas' ? <PaginaRutinas /> : (
             <PaginaSeccion seccion={seccion} />
           );
           return seccion.ruta === '/' ? { index: true, element } : { path: seccion.ruta.slice(1), element };
         }),
         { path: 'historial/:id', element: <PaginaDetalleHistorial /> },
+        { path: 'rutinas/nueva', element: <PaginaNuevaRutina /> },
+        { path: 'rutinas/:id', element: <PaginaEditarRutina /> },
         { path: '*', element: <NoEncontrada /> },
       ],
     }],
