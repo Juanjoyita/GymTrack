@@ -15,6 +15,8 @@ export const CLASES_ENLACE = `${AREA_TACTIL} ${FOCO_VISIBLE} inline-flex items-c
 export function PaginaLogin() {
   const t = textos.acceso.login;
   const { state } = useLocation();
+  // Aviso tras restablecer la contraseña (T049).
+  const avisoPrevio = (state as { aviso?: string } | null)?.aviso;
   const login = useIniciarSesion();
   const { formulario, errores, aviso, limpiar, rechazar, fallo } = useErroresFormulario();
 
@@ -35,12 +37,14 @@ export function PaginaLogin() {
       pie={<p>{t.pregunta} <Link to="/registro" state={state} className={CLASES_ENLACE}>{t.enlace}</Link></p>}
     >
       <form ref={formulario} noValidate onSubmit={enviar} className="flex flex-col gap-5">
+        {avisoPrevio && !aviso && <p role="status" className="rounded-xl border border-lime-300/30 bg-lime-300/10 px-4 py-3 text-base text-lime-100">{avisoPrevio}</p>}
         {aviso && <AvisoError mensaje={aviso} />}
         <Campo etiqueta={textos.acceso.email} name="email" type="email" autoComplete="email" inputMode="email" autoCapitalize="none" spellCheck={false} error={errores.email} />
         <Campo etiqueta={textos.acceso.contrasena} name="contrasena" type="password" autoComplete="current-password" error={errores.contrasena} />
         <Boton type="submit" cargando={login.isPending} className="mt-2 w-full">
           {login.isPending ? t.enviando : t.enviar}
         </Boton>
+        <Link to="/recuperar" className={`${CLASES_ENLACE} self-center`}>{textos.acceso.olvidaste}</Link>
       </form>
     </PantallaAcceso>
   );

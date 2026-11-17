@@ -41,10 +41,9 @@ const SECCIONES = [
 ];
 
 // Secciones que aún son marcadores «Próximamente».
-// Progreso dejó de ser marcador en T040.
+// Progreso dejó de ser marcador en T040 y Cuenta en T049.
 const RUTA_POR_SECCION = {
   rutinas: '/rutinas',
-  cuenta: '/cuenta',
 };
 
 describe('shell móvil', () => {

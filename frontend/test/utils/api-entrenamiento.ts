@@ -2,7 +2,7 @@ import { calcularMetricasProgreso, detectarRecordsPersonales } from '@gymtrack/d
 import { vi } from 'vitest';
 
 // API en memoria con estado según contracts/api.md («Entrenamientos — P1»): guarda, versiona, valida
-// la versión esperada y descarta como el servidor. La usan las pruebas de T027, T028, T041 y T042.
+// la versión esperada y descarta como el servidor. La usan las pruebas de T027, T028, T041, T042 y T049.
 // El progreso y los récords se calculan con el dominio a partir de los entrenamientos finalizados.
 export interface SerieApi { id: string; orden: number; repeticiones: number; pesoKg: number; registradaEn: string; version: number }
 export interface RealizadoApi { id: string; ejercicioId: string; nombre: string; posicion: number; nota: string | null; terminadoEn: string | null; volumenNotificadoKg: number | null; version: number; series: SerieApi[] }
@@ -11,6 +11,8 @@ export interface EntrenamientoApi { id: string; estado: 'en_curso' | 'finalizado
 export const PRESS = { id: '27000000-0000-4000-8000-000000000001', nombre: 'Press de banca', grupoMuscular: 'pecho', propio: false, ultimoUso: null };
 export const SENTADILLA = { id: '27000000-0000-4000-8000-000000000002', nombre: 'Sentadilla', grupoMuscular: 'cuadriceps', propio: false, ultimoUso: null };
 
+/** Contraseña de la cuenta de pruebas para DELETE /cuenta (T049). */
+export const CONTRASENA = 'Demo-T049-2026!';
 export const usuario = { id: '00000000-0000-4000-8000-000000000271', email: 't027@example.invalid', unidadPeso: 'kg' as 'kg' | 'lb', zonaHoraria: 'America/Bogota' };
 /** Récords de un ejercicio sin sesiones anteriores (contrato «GET /progreso/:id/records»). */
 export const SIN_RECORDS = { sesionesAnteriores: 0, pesoMax: null, unoRm: null, volumenSesion: null };
@@ -18,14 +20,15 @@ export const SIN_RECORDS = { sesionesAnteriores: 0, pesoMax: null, unoRm: null, 
 /**
  * entrenamiento: el que está en curso; pasados: finalizados (p. ej., registrados a posteriori);
  * records: récords fijos por ejercicio (T041; si no hay, se calculan con los finalizados); recordsFallan y
- * progresoFalla: esas consultas responden 500.
+ * progresoFalla: esas consultas responden 500; cuentaFalla: las operaciones de cuenta responden 500.
  */
-export const servidor: { entrenamiento: EntrenamientoApi | null; pasados: EntrenamientoApi[]; ultimas: Record<string, unknown>; records: Record<string, unknown>; recordsFallan?: boolean; progresoFalla?: boolean; sinRed: boolean; ultimaLenta?: Promise<void>; ejercicioLento?: Promise<void>; peticiones: { metodo: string; ruta: string; cuerpo: unknown }[] } = { entrenamiento: null, pasados: [], ultimas: {}, records: {}, sinRed: false, peticiones: [] };
+export const servidor: { entrenamiento: EntrenamientoApi | null; pasados: EntrenamientoApi[]; ultimas: Record<string, unknown>; records: Record<string, unknown>; recordsFallan?: boolean; progresoFalla?: boolean; cuentaFalla?: boolean; cuentaEliminada?: boolean; sinRed: boolean; ultimaLenta?: Promise<void>; ejercicioLento?: Promise<void>; peticiones: { metodo: string; ruta: string; cuerpo: unknown }[] } = { entrenamiento: null, pasados: [], ultimas: {}, records: {}, sinRed: false, peticiones: [] };
 
 /** Estado inicial para cada prueba: sin entrenamiento, con red y usuario en kg. */
 export function reiniciarServidor() {
-  Object.assign(servidor, { entrenamiento: null, pasados: [], ultimas: {}, records: {}, recordsFallan: false, progresoFalla: false, sinRed: false, ultimaLenta: undefined, ejercicioLento: undefined, peticiones: [] });
+  Object.assign(servidor, { entrenamiento: null, pasados: [], ultimas: {}, records: {}, recordsFallan: false, progresoFalla: false, cuentaFalla: false, cuentaEliminada: false, sinRed: false, ultimaLenta: undefined, ejercicioLento: undefined, peticiones: [] });
   usuario.unidadPeso = 'kg';
+  usuario.zonaHoraria = 'America/Bogota';
 }
 
 function json(status: number, cuerpo?: unknown) {
@@ -63,7 +66,37 @@ export function instalarApi() {
     if (servidor.sinRed) throw new TypeError('Failed to fetch');
     servidor.peticiones.push({ metodo, ruta: `${ruta}${url.search}`, cuerpo });
     const enCurso = servidor.entrenamiento;
+    if (servidor.cuentaEliminada) return json(401, { codigo: 'NO_AUTENTICADO', mensaje: 'No.', campos: null, actual: null });
     if (ruta === '/auth/yo') return json(200, usuario);
+    if (metodo === 'DELETE' && ruta === '/cuenta') {
+      if (servidor.cuentaFalla) return error500();
+      if (cuerpo?.contrasena !== CONTRASENA) return json(401, { codigo: 'NO_AUTENTICADO', mensaje: 'Credenciales incorrectas.', campos: null, actual: null });
+      Object.assign(servidor, { cuentaEliminada: true, entrenamiento: null, pasados: [] });
+      return json(204);
+    }
+    if (metodo === 'PATCH' && ruta === '/cuenta/preferencias') {
+      if (servidor.cuentaFalla) return error500();
+      // Como el servidor: solo unidadPeso y zonaHoraria; nunca toca los pesos guardados.
+      if (Object.keys(cuerpo).some((k) => k !== 'unidadPeso' && k !== 'zonaHoraria') || (cuerpo.unidadPeso && !['kg', 'lb'].includes(cuerpo.unidadPeso))) {
+        return json(400, { codigo: 'VALIDACION', mensaje: 'Datos no válidos.', campos: {}, actual: null });
+      }
+      Object.assign(usuario, cuerpo);
+      return json(200, usuario);
+    }
+    if (metodo === 'GET' && ruta === '/exportacion') {
+      if (servidor.cuentaFalla) return error500();
+      const formato = url.searchParams.get('formato');
+      if (formato !== 'json' && formato !== 'csv') return json(400, { codigo: 'VALIDACION', mensaje: 'Formato.', campos: { formato: 'json o csv' }, actual: null });
+      const contenido = formato === 'json' ? JSON.stringify({ usuario: { id: usuario.id, email: usuario.email }, entrenamientos: servidor.pasados }) : 'fecha,ejercicio,orden,repeticiones,pesoKg\r\n2026-11-02,Press de banca,1,8,60\r\n';
+      return new Response(contenido, { status: 200, headers: {
+        'Content-Type': formato === 'json' ? 'application/json; charset=utf-8' : 'text/csv; charset=utf-8',
+        'Content-Disposition': `attachment; filename="gymtrack-2026-11-16.${formato}"`,
+      } });
+    }
+    if (metodo === 'GET' && ruta === '/entrenamientos') {
+      const elementos = [...servidor.pasados].sort((a, b) => b.inicio.localeCompare(a.inicio)).map((e) => ({ id: e.id, inicio: e.inicio, fin: e.fin, zonaHoraria: e.zonaHoraria, resumen: { ...resumen(e), duracionMin: 60 } }));
+      return json(200, { elementos, siguienteCursor: null });
+    }
     if (ruta === '/ejercicios') return json(200, [PRESS, SENTADILLA].map(conUltimoUso));
     const ultima = /^\/ejercicios\/([^/]+)\/ultima-sesion$/.exec(ruta);
     if (ultima) { await servidor.ultimaLenta; return json(200, servidor.ultimas[ultima[1]] ?? null); }

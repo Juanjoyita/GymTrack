@@ -1,3 +1,4 @@
+import { kgALb } from '@gymtrack/domain';
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { useEffect, useState, type FormEvent } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
@@ -8,6 +9,7 @@ import { Campo } from '../../componentes/Campo';
 import { CampoSeleccion } from '../../componentes/CampoSeleccion';
 import { FOCO_VISIBLE } from '../../componentes/estilos';
 import { IconoCargando } from '../../componentes/Iconos';
+import { useSesion } from '../../app/sesion';
 import { useTituloDocumento } from '../../app/useTituloDocumento';
 import { textos } from '../../textos/es';
 
@@ -25,6 +27,8 @@ function leerFiltros(parametros: URLSearchParams): ValoresFiltros {
 
 export function PaginaHistorial() {
   useTituloDocumento(t.titulo);
+  // T049 (FR-024): el volumen se muestra en la unidad del usuario.
+  const unidad = useSesion().data?.unidadPeso ?? 'kg';
   const [parametros, setParametros] = useSearchParams();
   const [filtros, setFiltros] = useState(() => leerFiltros(parametros));
   const ejercicioId = parametros.get('ejercicioId') ?? undefined;
@@ -102,7 +106,7 @@ export function PaginaHistorial() {
                   </Link>
                   <p className="mt-1 text-sm text-slate-400">{hora} · {sesion.resumen.duracionMin} min</p>
                   <p className="mt-2 text-slate-200">{t.resumen(sesion.resumen.ejercicios, sesion.resumen.series)}</p>
-                  <p className="mt-1 text-slate-300">{t.volumen}: {numero.format(sesion.resumen.volumenKg)} kg</p>
+                  <p className="mt-1 text-slate-300">{t.volumen}: {numero.format(unidad === 'kg' ? sesion.resumen.volumenKg : kgALb(sesion.resumen.volumenKg))} {unidad}</p>
                 </article>
               </li>
             );

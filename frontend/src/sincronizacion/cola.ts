@@ -75,9 +75,12 @@ export function crearCola(usuarioId: string, almacen: Almacen = localStorage) {
   const clave = claveCola(usuarioId);
   let estado = leer(almacen, clave);
   const suscriptores = new Set<() => void>();
+  // Tras eliminar la cuenta (T049) la cola queda cerrada: nada vuelve a escribirse ni a enviarse.
+  let cerrada = false;
 
   // Se escribe en el almacén antes de notificar: si la escritura falla, la interfaz no confirma nada.
   function guardar(nuevo: Estado) {
+    if (cerrada) return;
     almacen.setItem(clave, JSON.stringify(nuevo));
     estado = nuevo;
     for (const avisar of suscriptores) avisar();
@@ -91,6 +94,13 @@ export function crearCola(usuarioId: string, almacen: Almacen = localStorage) {
 
   return {
     encolar,
+    /** Vacía y cierra la cola del usuario (cuenta eliminada): borra su almacenamiento para siempre. */
+    borrar() {
+      cerrada = true;
+      estado = { pendientes: [], conflictos: [] };
+      almacen.removeItem(clave);
+      for (const avisar of suscriptores) avisar();
+    },
     pendientes: () => estado.pendientes,
     conflictos: () => estado.conflictos,
 
