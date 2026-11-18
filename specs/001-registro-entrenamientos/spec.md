@@ -101,6 +101,8 @@ usuario no puede acceder a ellos.
 11. **Given** un entrenamiento en curso, **When** se pierde la conexión o se recarga la página,
    **Then** no se pierde ninguna serie ya introducida y el entrenamiento se puede seguir registrando.
 
+**Aceptación de accesibilidad**: todas las pantallas de esta historia deben superar una revisión automática y manual de WCAG 2.1 AA: teclado completo, foco visible, etiquetas accesibles, contraste, información que no dependa solo del color y controles táctiles de al menos 44×44 px desde 360 px de ancho. La revisión manual incluye lector de pantalla; en progreso, la tabla debe ofrecer los mismos datos que el gráfico.
+
 ---
 
 ### User Story 2 - Consultar el historial de entrenamientos (Priority: P2)
@@ -131,6 +133,8 @@ eliminación funcionan.
    confirmación y, una vez confirmado, desaparece del historial y del progreso.
 6. **Given** un usuario sin entrenamientos, **When** abre el historial, **Then** ve un mensaje
    que le invita a registrar su primer entrenamiento.
+
+**Aceptación de accesibilidad**: todas las pantallas de esta historia deben superar una revisión automática y manual de WCAG 2.1 AA: teclado completo, foco visible, etiquetas accesibles, contraste, información que no dependa solo del color y controles táctiles de al menos 44×44 px desde 360 px de ancho. La revisión manual incluye lector de pantalla; en progreso, la tabla debe ofrecer los mismos datos que el gráfico.
 
 ---
 
@@ -174,6 +178,8 @@ las métricas, la evolución y los récords mostrados coinciden con los valores 
 9. **Given** un ejercicio con una sola sesión, **When** el usuario abre su progreso, **Then** ve los
    datos de esa sesión y un aviso de que hacen falta más sesiones para ver una tendencia.
 
+**Aceptación de accesibilidad**: todas las pantallas de esta historia deben superar una revisión automática y manual de WCAG 2.1 AA: teclado completo, foco visible, etiquetas accesibles, contraste, información que no dependa solo del color y controles táctiles de al menos 44×44 px desde 360 px de ancho. La revisión manual incluye lector de pantalla; en progreso, la tabla debe ofrecer los mismos datos que el gráfico.
+
 ---
 
 ### User Story 4 - Gestionar la cuenta y los datos personales (Priority: P4)
@@ -207,6 +213,8 @@ ni a sus datos.
 6. **Given** un enlace de restablecimiento ya usado o con más de 1 hora de antigüedad, **When** se
    intenta usar, **Then** el sistema lo rechaza con un mensaje claro y permite solicitar uno nuevo.
 
+**Aceptación de accesibilidad**: todas las pantallas de esta historia deben superar una revisión automática y manual de WCAG 2.1 AA: teclado completo, foco visible, etiquetas accesibles, contraste, información que no dependa solo del color y controles táctiles de al menos 44×44 px desde 360 px de ancho. La revisión manual incluye lector de pantalla; en progreso, la tabla debe ofrecer los mismos datos que el gráfico.
+
 ---
 
 ### User Story 5 - Organizar rutinas personalizadas por día (Priority: P5)
@@ -236,6 +244,8 @@ registrado no cambia.
    y el registro de series funciona igual que en la User Story 1.
 5. **Given** un entrenamiento iniciado desde una rutina, **When** el usuario añade, quita o reordena
    ejercicios en la sesión, **Then** la rutina original no se modifica.
+
+**Aceptación de accesibilidad**: todas las pantallas de esta historia deben superar una revisión automática y manual de WCAG 2.1 AA: teclado completo, foco visible, etiquetas accesibles, contraste, información que no dependa solo del color y controles táctiles de al menos 44×44 px desde 360 px de ancho. La revisión manual incluye lector de pantalla; en progreso, la tabla debe ofrecer los mismos datos que el gráfico.
 
 ---
 

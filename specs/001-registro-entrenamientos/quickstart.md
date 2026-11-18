@@ -10,27 +10,98 @@ forman parte del plan y deben respetarse.
 
 - Node.js 22 LTS y npm 10+
 - Docker Desktop (o Docker Engine + Docker Compose v2)
+- mkcert para generar y confiar certificados locales (claves fuera del repositorio).
 - Google Chrome estable (pruebas de rendimiento y accesibilidad)
 
 ## Puesta en marcha
 
 ```bash
 cp .env.example .env              # valores de desarrollo; nunca se suben secretos al repositorio
-docker compose up -d              # PostgreSQL 16 (dev y test) + Mailpit
 npm install                       # instala los tres workspaces
+npm run tls:local                 # genera y confía certificados locales; Mailpit se integra en T043A
+docker compose up -d              # PostgreSQL 16 (dev y test); Mailpit disponible desde T043A
 npm run db:migrate                # aplica migraciones, incluido el catálogo de 50 ejercicios
-npm run dev                       # backend en :3000 y frontend en :5173
+npm run dev                       # backend HTTPS en :3000 y frontend HTTPS en :5173
 ```
 
 | Servicio | URL |
 |---|---|
-| Aplicación | http://localhost:5173 |
-| API | http://localhost:3000/api |
-| Mailpit (correos de prueba) | http://localhost:8025 |
+| Aplicación | https://localhost:5173 |
+| API | https://localhost:3000/api |
+| Mailpit (desde T043A, correos de prueba) | https://localhost:8025 |
+
+## HTTPS local y entorno de entrega (T010A/T011)
+
+Instala mkcert (macOS: `brew install mkcert`) y ejecuta `npm run tls:local` con tu
+usuario habitual. En macOS, el script confía en la CA en el llavero **del usuario**;
+puede aparecer una autorización del sistema. En Linux usa `mkcert -install` y los
+prerrequisitos de confianza de su distribución. Reinicia los navegadores abiertos
+si no reconocen todavía la CA. La instalación global de macOS con `mkcert -install`
+requiere permisos administrativos y no es necesaria si el llavero del usuario ya confía.
+
+Certificado, clave y copia **pública** de la CA quedan en
+`~/.local/share/gymtrack/tls/`; la clave tiene permisos 600. La clave privada de la CA
+permanece en el CAROOT de mkcert. No se comparten ni versionan claves. Para cambiar
+el directorio, exporta `GYMTRACK_TLS_DIR` con una ruta absoluta antes de generar y
+arrancar los servicios. `TLS_CERT_PATH`, `TLS_KEY_PATH` y `TLS_CA_PATH` permiten usar
+archivos alternativos (rutas absolutas, o relativas a la raíz del proyecto). No hace
+falta sobrescribir un `.env` local existente: añade solo las variables necesarias.
+
+Frontend y API escuchan exclusivamente HTTPS en localhost:5173 y localhost:3000.
+El cliente usa `/api` en el mismo origen; Vite lo reenvía por HTTPS al backend y
+comprueba su certificado con la CA. No hace falta CORS para este flujo.
+Si faltan certificados, el arranque falla; no existe alternativa HTTP.
+
+`npm run test:e2e` construye el frontend y sirve el build de producción por HTTPS junto
+con la API en `NODE_ENV=test`, sin reutilizar servidores de desarrollo. Así el service
+worker está activo en las pruebas offline. Usa Chrome estable instalado, viewport
+360×800 y certificados comprobados (`ignoreHTTPSErrors: false`). El proceso Node recibe la
+CA **pública** mediante `NODE_EXTRA_CA_CERTS`; Supertest también usa HTTPS y CA explícita.
+Los tests acceden solo a `gymtrack_test`; las factorías que usan `public` limpian
+únicamente sus fixtures y las pruebas REST aisladas crean su propio esquema. Los puertos
+3000/5173 deben estar libres antes de ejecutar E2E. Captura: `test-results/e2e/`.
+
+Para la entrega, servir `frontend/dist` en un hosting HTTPS y conservar `/api` en el
+mismo origen mediante proxy hacia la API HTTPS. El servidor debe recibir la cadena
+completa del certificado válido para su dominio y la clave mediante `TLS_CERT_PATH`
+y `TLS_KEY_PATH` (montaje/secretos del entorno, fuera de Git); la CA pública o privada
+debe ser confiable para el proxy. El backend escucha localhost:3000, adecuado para
+un proxy en el mismo host. No se usa la CA personal de mkcert en producción ni se
+desactiva la validación TLS. Esta tarea documenta la configuración; no despliega un
+entorno remoto. Mailpit HTTPS se integra en T043A; cookies Secure se verifican tras
+autenticación en T023/T029.
+
+## Mailpit y SMTP de pruebas (T043A)
+
+Después de `npm run tls:local`, inicia `docker compose up -d mailpit`.
+Mailpit captura SMTP en `localhost:1025` y ofrece panel y API en
+`https://localhost:8025`. Ambos puertos se publican solo en loopback. El panel usa el
+certificado local montado en solo lectura; no se desactiva la validación TLS.
+SMTP local no requiere credenciales ni STARTTLS, conforme al transporte interno
+previsto en el plan; no hay relay ni envío a proveedores externos.
+
+Las variables opcionales están en `.env.example`: `SMTP_HOST`, `SMTP_PORT`,
+`SMTP_FROM`, `MAILPIT_PORT` y `MAILPIT_URL`. Si se cambia el puerto del panel, ajustar
+la URL; si se cambia SMTP_PORT, usarlo también en el cliente SMTP del host.
+`GYMTRACK_TLS_DIR` o `TLS_CERT_PATH`/`TLS_KEY_PATH` permiten montar certificados
+alternativos existentes. Genera los certificados antes de arrancar Compose.
+
+Verifica el envío y la lectura por API y panel HTTPS con Chrome instalado:
+
+```bash
+npm run test --workspace backend -- --runTestsByPath test/infraestructura/correo.e2e-spec.ts
+```
+
+La prueba usa direcciones `example.invalid`, un destinatario único y elimina solo
+su propio mensaje al terminar. Guarda una captura local en
+`test-results/mailpit/correo-sintetico-https.png`. El fixture SMTP está en
+`backend/test/utils/correo.ts` y solo se ejecuta con `NODE_ENV=test` y destinos locales.
+No requiere base de datos ni implementa el servicio de correo de la aplicación.
 
 ## Ejecutar las pruebas
 
 ```bash
+npm test                  # todos los arneses existentes, incluido E2E HTTPS
 npm run test:domain       # unitarios de packages/domain (Vitest)
 npm run test:backend      # integración de la API contra gymtrack_test (Jest + Supertest)
 npm run test:frontend     # componentes y cola de sincronización (Vitest + RTL)
@@ -38,6 +109,17 @@ npm run test:e2e          # flujos críticos + axe en viewport 360×800 (Playwri
 npm run lint && npm run typecheck
 npm run perf              # Lighthouse 5 veces sobre el build de producción (entorno de la constitución)
 ```
+
+`npm run db:seed:carga` crea de forma reproducible 500 entrenamientos y 1500 series sintéticas
+para una cuenta dedicada, únicamente en desarrollo o pruebas. Repetirlo reemplaza solo los datos
+de esa cuenta. En pruebas, ejecuta `NODE_ENV=test npm run db:seed:carga --workspace backend`;
+la ejecución con `NODE_ENV=production` se rechaza. `npm run perf` prepara esta carga en
+`gymtrack_test` y mide también las consultas de historial y progreso.
+
+`npm run perf` construye y sirve el build de producción por HTTPS, aplica el perfil de
+Chrome estable a 360×800, CPU 4× y red 10/5 Mbps con 100 ms, y mide cinco cargas frías
+además de la respuesta visual local al confirmar una serie. Los informes detallados quedan
+en `test-results/perf/`.
 
 Puerta de integración (constitución): todo lo anterior en verde antes de fusionar un pull request.
 
@@ -62,8 +144,7 @@ contrato están en [data-model.md](./data-model.md) y [contracts/api.md](./contr
 2. Contar las interacciones por serie con el ejercicio seleccionado → **≤ 3**.
 3. Añadir "Sentadilla", registrar 2 series y finalizar.
 
-**Esperado**: el resumen muestra 2 ejercicios, 5 series y el volumen correcto; el historial lo
-incluye con su duración.
+**Esperado**: el resumen muestra 2 ejercicios, 5 series y el volumen correcto; en P1 se compara la persistencia exacta contra el fixture en la BD y se comprueba el prellenado tras reingresar, sin usar consultas ni pantallas P2. La inclusión en la pantalla de historial se verifica en V8.
 
 ### V3 — Prellenado con la última sesión (US1 escenario 7, FR-009)
 
@@ -89,12 +170,12 @@ API (validación idéntica en interfaz y servidor).
 
 ### V5 — Sin conexión y recarga (FR-012, SC-004)
 
-1. Con un entrenamiento en curso, cortar la red (DevTools → *Offline*) y registrar 3 series.
+1. Servir el build de producción por HTTPS, cargar online y esperar a que el service worker controle la página y complete el precaché del shell. Con un entrenamiento en curso, cortar la red (DevTools → *Offline*) y registrar 3 series.
 2. Recargar la página sin red y cerrar y reabrir la pestaña.
-3. Restablecer la red.
+3. Registrar otra serie tras la recarga/reapertura todavía sin red y restablecer la conexión.
 
-**Esperado**: las 3 series siguen visibles y marcadas como pendientes; al volver la conexión se
-sincronizan y el indicador de pendientes llega a 0. En la base de datos hay exactamente 3 series
+**Esperado**: las series introducidas siguen visibles y marcadas como pendientes; al volver la conexión se
+sincronizan y el indicador de pendientes llega a 0. En la base de datos hay exactamente 4 series
 nuevas (sin duplicados). Cubierto por el E2E `offline.spec`.
 
 ### V6 — Conflicto entre dos dispositivos (FR-031)
@@ -168,3 +249,9 @@ tiene una tabla equivalente. El fixture incluye obligatoriamente estos casos (FR
   registrar una serie < 100 ms.
 - Con 500 entrenamientos sembrados (`npm run db:seed:carga`), el historial y el progreso cargan en
   < 2 s.
+
+## Entrega y verificaciones por incremento
+
+En T029 se ejecutan V1–V7 sin pantalla de historial, accesibilidad y rendimiento del MVP: primera carga <3 s en al menos 4/5 ejecuciones con todas las cachés vacías y respuesta visual local <100 ms, usando el perfil constitucional. V5 se ejecuta por separado tras preparar la caché estática online. El script `perf` admite el incremento P1 sin exigir rutas de P2/P3; al cierre añade la medición con 500 entrenamientos.
+
+Mailpit y el fixture SMTP deben estar operativos antes de ejecutar la aceptación roja de P4; el correo sintético de infraestructura no implementa recuperación. El README se redacta en T061A y un segundo integrante verifica sus instrucciones desde entorno limpio en T061B antes de T062.

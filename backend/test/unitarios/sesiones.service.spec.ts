@@ -1,0 +1,95 @@
+import { SesionesService } from '../../src/entrenamientos/sesiones.service';
+import { Entrenamiento } from '../../src/database/entities/entrenamiento';
+
+describe('SesionesService', () => {
+  type MockRepo = { query: jest.Mock; create: jest.Mock; save: jest.Mock; findOne: jest.Mock; remove: jest.Mock; update: jest.Mock; createQueryBuilder: jest.Mock };
+  const setup = (hasSeries = true) => {
+    const repo: MockRepo = { query: jest.fn(async (_sql: string, values: unknown[]) => [{ id: values[0], usuario_id: values[1], estado: values[2], inicio: values[3], fin: values[4], zona_horaria: values[5], ultima_actividad_en: values[3], nota: values[6], rutina_origen_id: null }]), create: jest.fn((x) => x), save: jest.fn(async (x) => x), findOne: jest.fn(), remove: jest.fn(), update: jest.fn(), createQueryBuilder: jest.fn() };
+    const builder = { update: jest.fn().mockReturnThis(), delete: jest.fn().mockReturnThis(), from: jest.fn().mockReturnThis(), set: jest.fn().mockReturnThis(), where: jest.fn().mockReturnThis(), returning: jest.fn().mockReturnThis(), execute: jest.fn().mockResolvedValue({ affected: 1, raw: [{ id: 'i', nota: 'nota', version: 2 }] }) };
+    repo.createQueryBuilder.mockReturnValue(builder);
+    const txRepo = { findOne: jest.fn(), remove: jest.fn(), save: jest.fn(async (x: unknown) => x) };
+    const seriesRepo = { createQueryBuilder: () => ({ innerJoin: () => ({ where: () => ({ getExists: async () => hasSeries }) }) }) };
+    const manager = { getRepository: (entity: unknown) => entity === Entrenamiento ? txRepo : seriesRepo };
+    const source = { transaction: (fn: (manager: unknown) => unknown) => fn(manager) };
+    return { service: new SesionesService(repo as never, source as never), repo, txRepo };
+  };
+  it('inicia y conserva fecha UTC, zona IANA y nota', async () => {
+    const { service } = setup();
+    await expect(service.iniciar('u', { id: 'i', inicio: '2026-11-10T18:00:00Z', zonaHoraria: 'America/Bogota', nota: 'n' }))
+      .resolves.toMatchObject({ estado: 'en_curso', zona_horaria: 'America/Bogota', nota: 'n', inicio: new Date('2026-11-10T18:00:00Z') });
+  });
+  it('crea registro pasado finalizado', async () => {
+    const { service } = setup();
+    await expect(service.iniciar('u', { id: 'i', inicio: '2020-01-01T00:00:00Z', fin: '2020-01-01T01:00:00Z', zonaHoraria: 'UTC' }))
+      .resolves.toMatchObject({ estado: 'finalizado', fin: new Date('2020-01-01T01:00:00Z') });
+  });
+  it('rechaza zona horaria que no es IANA', async () => {
+    const { service } = setup();
+    await expect(service.iniciar('u', { zonaHoraria: 'nada', inicio: new Date(), })).rejects.toMatchObject({ status: 400, response: { codigo: 'VALIDACION' } });
+  });
+  it('marca inactivo solo tras superar 12 horas', async () => {
+    const { service, repo } = setup();
+    const now = new Date('2026-11-13T12:00:00Z'); jest.useFakeTimers().setSystemTime(now);
+    repo.findOne.mockResolvedValue({ ultima_actividad_en: new Date(now.getTime() - 12 * 3600000) });
+    await expect(service.recuperar('u')).resolves.toMatchObject({ inactivo: false });
+    repo.findOne.mockResolvedValue({ ultima_actividad_en: new Date(now.getTime() - 12 * 3600000 - 1) });
+    await expect(service.recuperar('u')).resolves.toMatchObject({ inactivo: true });
+    jest.useRealTimers();
+  });
+  it('finaliza inactivo con hora de última actividad y existente con hora actual', async () => {
+    const { service, txRepo } = setup();
+    const row = { id: 'i', inicio: new Date(Date.now() - 14 * 3600000), ultima_actividad_en: new Date(Date.now() - 13 * 3600000), estado: 'en_curso' };
+    txRepo.findOne.mockResolvedValue(row);
+    await expect(service.finalizar('u', 'i')).resolves.toMatchObject({ fin: row.ultima_actividad_en, estado: 'finalizado' });
+  });
+  it('descarta sesión vacía al finalizar', async () => {
+    const { service, txRepo } = setup(false); txRepo.findOne.mockResolvedValue({ id: 'i' });
+    await expect(service.finalizar('u', 'i')).resolves.toEqual({ descartado: true });
+    expect(txRepo.remove).toHaveBeenCalled();
+  });
+  it('permite descartar explícitamente una sesión y actualiza nota propia', async () => {
+    const { service, repo } = setup(); const row = { id: 'i', nota: null }; repo.findOne.mockResolvedValue(row);
+    await service.actualizarNota('u', 'i', 'nota', 1);
+    expect(repo.createQueryBuilder().where).toHaveBeenCalledWith('id = :id AND usuario_id = :usuarioId AND version = :version', { id: 'i', usuarioId: 'u', version: 1 });
+    await service.descartar('u', 'i', 1);
+    expect(repo.createQueryBuilder().where).toHaveBeenLastCalledWith('id = :id AND usuario_id = :usuarioId AND version = :version', { id: 'i', usuarioId: 'u', version: 1 });
+    expect(repo.remove).not.toHaveBeenCalled();
+  });
+  it('convierte actualización condicional sin filas a conflicto de versión si existe recurso', async () => {
+    const { service, repo } = setup();
+    repo.createQueryBuilder().execute.mockResolvedValue({ affected: 0, raw: [] });
+    repo.findOne.mockResolvedValue({ id: 'i', version: 2 });
+    await expect(service.actualizarNota('u', 'i', 'nota', 1)).rejects.toMatchObject({ status: 409, response: { codigo: 'CONFLICTO_VERSION' } });
+  });
+  it('mantiene NO_ENCONTRADO para sesión ajena/inexistente tras actualización condicional', async () => {
+    const { service, repo } = setup();
+    repo.createQueryBuilder().execute.mockResolvedValue({ affected: 0, raw: [] }); repo.findOne.mockResolvedValue(null);
+    await expect(service.actualizarNota('otro', 'i', 'nota', 1)).rejects.toMatchObject({ status: 404, response: { codigo: 'NO_ENCONTRADO' } });
+  });
+  it('rechaza una segunda sesión activa concurrente cuando la restricción única gana carrera', async () => {
+    const { service, repo } = setup(); let calls = 0;
+    repo.query.mockImplementation(async () => { if (++calls === 2) throw { driverError: { code: '23505', constraint: 'uq_entrenamiento_en_curso' } }; return [{ id: 'i' }]; });
+    const results = await Promise.allSettled([1, 2].map((n) => service.iniciar('u', { id: String(n), zonaHoraria: 'UTC' })));
+    expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
+    expect(results.filter((r) => r.status === 'rejected')).toHaveLength(1);
+  });
+  it('no traduce otra violación 23505 como sesión activa', async () => {
+    const { service, repo } = setup();
+    repo.query.mockRejectedValue({ driverError: { code: '23505', constraint: 'entrenamiento_pkey' } });
+    await expect(service.iniciar('u', { id: 'i', zonaHoraria: 'UTC' })).rejects.toMatchObject({ driverError: { constraint: 'entrenamiento_pkey' } });
+  });
+  it('finalizar y descartar sesión ajena responden NO_ENCONTRADO', async () => {
+    const { service, repo, txRepo } = setup();
+    txRepo.findOne.mockResolvedValue(null); repo.findOne.mockResolvedValue(null);
+    await expect(service.finalizar('otro', 'i')).rejects.toMatchObject({ status: 404, response: { codigo: 'NO_ENCONTRADO' } });
+    repo.createQueryBuilder().execute.mockResolvedValue({ affected: 0, raw: [] });
+    await expect(service.descartar('otro', 'i', 1)).rejects.toMatchObject({ status: 404, response: { codigo: 'NO_ENCONTRADO' } });
+  });
+  it('DELETE with stale version returns current resource conflict', async () => {
+    const { service, repo } = setup();
+    repo.createQueryBuilder().execute.mockResolvedValue({ affected: 0, raw: [] });
+    repo.findOne.mockResolvedValue({ id: 'i', version: 2 });
+    await expect(service.descartar('u', 'i', 1)).rejects.toMatchObject({ status: 409, response: { codigo: 'CONFLICTO_VERSION' } });
+    expect(repo.remove).not.toHaveBeenCalled();
+  });
+});

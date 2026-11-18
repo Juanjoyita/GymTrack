@@ -18,7 +18,7 @@ Enfoque técnico: monorepo con npm workspaces. El **frontend** es React + TypeSc
 récords, conversión kg/lb), para que interfaz y servidor validen y calculen igual. El registro
 tolera cortes de conexión con una cola local de operaciones en `localStorage` e identificadores
 generados en el cliente (escrituras idempotentes). Los conflictos entre dispositivos se detectan
-con bloqueo optimista (`version`) y se resuelven por el usuario. Los récords se derivan de las
+con bloqueo optimista (`version`) y se resuelven por el usuario. Un service worker mínimo precachea exclusivamente el shell estático para recargar y reabrir la aplicación sin conexión después de la primera carga online; la cola y los datos propios permanecen en localStorage, sin Background Sync. Los récords se derivan de las
 series en cada consulta, sin tabla propia. Detalle de cada decisión en [research.md](./research.md).
 
 ## Technical Context
@@ -46,8 +46,7 @@ móvil y escritorio) desde 360 px de ancho; servidor Node.js en Linux
 con 500 entrenamientos < 2 s (SC-005)
 
 **Constraints**: ≤ 3 interacciones por serie (SC-001); 0 series confirmadas perdidas con cortes,
-recargas o cierres (SC-004); WCAG 2.1 AA; controles ≥ 44×44 px; HTTPS en cualquier entorno
-desplegado; ningún dato personal ni secreto en logs o en el repositorio
+recargas o cierres (SC-004); WCAG 2.1 AA; controles ≥ 44×44 px; HTTPS para frontend y API en todos los entornos, incluido desarrollo y pruebas; ningún dato personal ni secreto en logs o en el repositorio
 
 **Scale/Scope**: proyecto académico; decenas de usuarios de prueba, hasta ~500 entrenamientos por
 usuario; ~15 pantallas; 5 historias de usuario; equipo de 4 personas
@@ -62,10 +61,10 @@ usuario; ~15 pantallas; 5 historias de usuario; equipo de 4 personas
 | **II. Simplicidad y MVP primero** | Alcance limitado a la spec; nada de IA, funciones sociales, pagos ni wearables. Historias P1–P5 entregables por separado; P1 incluye la autenticación para aportar valor sola. Sin servicios adicionales salvo Mailpit (justificado). Dependencias fuera del stack obligatorio, justificadas en *Complexity Tracking*. | ✅ Cumple (con justificaciones) |
 | **III. Registro rápido, mobile-first** | Diseño desde 360 px. Formulario de serie prellenado (FR-009) y confirmación en un toque: ≤ 3 interacciones. Escritura local inmediata y cola de sincronización en `localStorage` que sobrevive a recargas y cortes (R-08). Controles ≥ 44×44 px. | ✅ Cumple |
 | **IV. Test-first** | Tests de aceptación por historia escritos y en rojo antes de implementar. Unitarios de `packages/domain` con casos límite (volumen, 1RM, récords, unidades, validación). E2E para registrar, historial, progreso y exportación. Herramientas habituales del stack; solo Docker Compose como infraestructura (R-19). Nada se integra con tests en rojo. | ✅ Cumple |
-| **V. Privacidad y seguridad** | Autorización en el servidor en cada operación, filtrando por el usuario de la sesión (R-04). Argon2id; JWT en cookie `httpOnly` `Secure` `SameSite=Strict` (R-03). Tokens de recuperación guardados como hash, de un solo uso y válidos 1 h (R-05). Datos personales mínimos; logs sin cuerpos, emails, tokens ni pesos (R-21). Validación de entradas en el servidor con los mismos esquemas que el cliente (R-10). HTTPS obligatorio fuera de `localhost`. | ✅ Cumple |
+| **V. Privacidad y seguridad** | Autorización en el servidor en cada operación, filtrando por el usuario de la sesión (R-04). Argon2id; JWT en cookie `httpOnly` `Secure` `SameSite=Strict` (R-03). Tokens de recuperación guardados como hash, de un solo uso y válidos 1 h (R-05). Datos personales mínimos; logs sin cuerpos, emails, tokens ni pesos (R-21). Validación de entradas en el servidor con los mismos esquemas que el cliente (R-10). HTTPS obligatorio también en localhost, con certificados locales confiables mediante mkcert y cookies Secure en todos los entornos; no se ignoran errores TLS en E2E. | ✅ Cumple |
 | **VI. Accesibilidad** | WCAG 2.1 AA verificada con axe (automático) y revisión manual en cada historia. Gráficos de progreso con tabla equivalente; las series del gráfico no dependen solo del color (R-15). Navegación por teclado y foco visible. | ✅ Cumple |
 | **Stack obligatorio** | React + TypeScript + Tailwind; NestJS + TypeScript; TypeORM; PostgreSQL; Docker Compose; API REST. | ✅ Cumple |
-| **Rendimiento medible** | Lighthouse CLI con el perfil exacto de la constitución (360×800, CPU 4×, 10/5 Mbps, 100 ms), 5 ejecuciones (R-19). | ✅ Cumple |
+| **Rendimiento medible** | Lighthouse CLI con el perfil exacto de la constitución (360×800, CPU 4×, 10/5 Mbps, 100 ms), 5 ejecuciones (R-19), desde la puerta P1/T029 y repetidas al cierre; latencia local <100 ms desde P1. | ✅ Cumple |
 
 **Resultado previo a la fase 0**: sin violaciones. Hay dependencias adicionales, justificadas abajo.
 
@@ -147,6 +146,8 @@ frontend/
 │   ├── main.tsx
 │   ├── app/                    # router, layout, proveedores (TanStack Query, sesión)
 │   ├── api/                    # cliente HTTP tipado según contracts/api.md
+│   ├── sw.ts                   # precaché versionado del shell, sin API ni datos personales
+│   ├── registrar-sw.ts          # registro y disponibilidad offline tras control del worker
 │   ├── sincronizacion/         # cola de operaciones, sincronizador, conflictos (R-08, R-09)
 │   ├── textos/                 # textos de la interfaz centralizados (es)
 │   ├── componentes/            # UI accesible reutilizable (botones, campos, diálogos, avisos)
@@ -202,6 +203,15 @@ acordado.
 | React Router | Navegación entre ~15 pantallas | Navegación manual con estado: frágil y sin URLs compartibles |
 | TanStack Query | Caché e invalidación tras cada edición (historial y progreso recalculados) | `fetch` a mano: datos desactualizados y más código |
 | Recharts | Gráficos de progreso (FR-019) | SVG a mano: mucho más tiempo del equipo |
-| Cola de sincronización en `localStorage` | Exigida por el Principio III y FR-012 / SC-004 | Ninguna más simple cumple el requisito; se descartaron IndexedDB y *service worker* por complejidad |
+| Cola de sincronización en `localStorage` | Exigida por el Principio III y FR-012 / SC-004 | IndexedDB añade complejidad innecesaria al volumen local; el service worker tiene otra función: cargar el shell sin red |
+| Service worker mínimo para shell estático | US1.11 exige continuar tras recarga offline, que localStorage por sí solo no resuelve; no cachea API ni datos personales | Caché HTTP ordinaria no garantiza disponibilidad offline; Background Sync y librerías PWA completas son innecesarias |
+| mkcert en desarrollo y pruebas | Certificados locales confiables para HTTPS y cookies Secure conforme al Principio V | HTTP local o ignorar errores TLS introduce una excepción no aprobada |
 | Bloqueo optimista (`version`) | FR-031: detectar conflictos sin sobrescribir en silencio | "Gana el último" (descartado en la clarificación 5) |
 | Playwright, axe, Lighthouse CLI | E2E de flujos críticos, accesibilidad y rendimiento reproducible exigidos por la constitución | Pruebas manuales: no son reproducibles ni bloquean la integración |
+
+## Precisiones tras análisis de consistencia — 2026-11-12
+
+- Se mantienen alcance y prioridades; no se modifica la constitución. HTTPS se prepara antes de aceptar P1. Las comunicaciones web de frontend/API y panel de correo usan certificados confiables; el transporte interno PostgreSQL/SMTP no es HTTP.
+- Las pruebas aisladas de servicios pueden quedar verdes antes del cableado; la aceptación HTTP queda verde tras registrar módulos, y el E2E después de integrar pantallas. Todas las historias conservan evidencia roja previa a su implementación. Mailpit y su fixture se preparan antes del rojo de P4.
+- T029 comprueba filas persistidas contra fixtures, resumen final y prellenado tras reingresar; no usa la pantalla ni las consultas de historial P2. También verifica rendimiento constitucional de P1.
+- El README de entrega se prepara y valida por un segundo integrante desde entorno limpio antes del cierre; quickstart y README deben coincidir.
