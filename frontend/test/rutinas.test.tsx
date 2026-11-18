@@ -76,8 +76,10 @@ describe('T055: lista de rutinas', () => {
 
   it('sin conexión dice que no hay conexión', async () => {
     abrir();
-    await screen.findByRole('heading', { level: 1, name: 'Rutinas' });
+    // Esperar datos, no solo el título: no reutilizar una consulta aún en vuelo.
+    await screen.findByText('Aún no tienes rutinas.');
     await ir('/');
+    await screen.findByRole('heading', { level: 1, name: 'Entrenar' });
     servidor.sinRed = true;
     await ir('/rutinas');
     expect(await screen.findByRole('alert')).toHaveTextContent('No hay conexión con el servidor.');

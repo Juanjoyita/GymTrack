@@ -22,7 +22,21 @@ function useFocoAlNavegar() {
 
   useEffect(() => {
     if (key === 'default') return;
-    contenido.current?.querySelector<HTMLElement>('h1')?.focus();
+    const main = contenido.current;
+    if (!main) return;
+    // Las páginas lazy pueden seguir en Suspense cuando cambia la ruta.
+    const enfocar = () => {
+      const titulo = main.querySelector<HTMLElement>('h1');
+      if (!titulo) return false;
+      titulo.focus();
+      return true;
+    };
+    if (enfocar()) return;
+    const observer = new MutationObserver(() => {
+      if (enfocar()) observer.disconnect();
+    });
+    observer.observe(main, { childList: true, subtree: true });
+    return () => observer.disconnect();
   }, [key]);
 
   return contenido;
