@@ -145,7 +145,7 @@ describe('T024: inicio de sesión', () => {
     await rellenarLogin(usuario, `  ${ANA.email} `, CONTRASENA);
     const titulo = await screen.findByRole('heading', { level: 1, name: textos.historial.titulo });
     expect(router.state.location.pathname).toBe('/historial');
-    expect(titulo).toHaveFocus();
+    await waitFor(() => expect(titulo).toHaveFocus());
     expect(api.peticiones.find((p) => p.ruta === '/auth/login')?.cuerpo).toEqual({ email: ANA.email, contrasena: CONTRASENA });
   });
 
@@ -257,7 +257,7 @@ describe('T024: cierre y cambio de sesión', () => {
     const quitar = registrarLimpiezaDeSesion(limpieza);
     cliente.setQueryData(['ejercicios'], [{ id: 'dato-de-ana' }]);
     const cuenta = await screen.findByRole('main');
-    expect(within(cuenta).getByText(ANA.email)).toBeInTheDocument();
+    expect(await within(cuenta).findByText(ANA.email)).toBeInTheDocument();
 
     await usuario.click(within(cuenta).getByRole('button', { name: 'Cerrar sesión' }));
 

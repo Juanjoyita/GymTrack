@@ -16,7 +16,9 @@ La [especificación](specs/001-registro-entrenamientos/spec.md), el
 [quickstart con escenarios V1–V12](specs/001-registro-entrenamientos/quickstart.md)
 definen alcance y criterios. La [lista de tareas](specs/001-registro-entrenamientos/tasks.md)
 registra el estado de entrega. Esta guía prepara T061A; **la comprobación independiente desde un
-clon limpio por I4 (T061B) aún está pendiente**. No constituye la puerta final de entrega.
+clon limpio por I4 (T061B) aún está pendiente**. La
+[repetición técnica del README](e2e/resultados/readme.md) y la
+[puerta final](e2e/resultados/cierre.md) registran resultados y fallos observados; no están aprobadas.
 
 ## Requisitos
 
@@ -62,6 +64,12 @@ Clonar una rama no incorpora archivos sin commit ni cambios que todavía no se h
 `npm ci` usa el lockfile y se ejecuta solo en la raíz. Copiar `.env.example` únicamente al preparar
 el clon nuevo: no sobrescribir un `.env` que ya tenga configuración.
 
+Si hay otro clon en la misma máquina, definir en el nuevo `.env` un `COMPOSE_PROJECT_NAME`
+exclusivo (por ejemplo `gymtrack-revision`) **antes de arrancar Compose** y elegir puertos
+BD/SMTP/panel libres con las variables de la tabla. Esto crea contenedores y volumen separados;
+un clon llamado también `GymTrack` usaría por defecto el mismo proyecto Compose. No ejecutar
+simultáneamente las aplicaciones de ambos clones: API/frontend mantienen los puertos 3000/5173.
+
 Generar los dos secretos locales sin imprimirlos ni copiarlos a esta documentación:
 
 ```bash
@@ -91,6 +99,7 @@ No definir `NODE_ENV=production` ni `GYMTRACK_E2E=1` globalmente para trabajar e
 
 | Variables | Configuración local y función |
 |---|---|
+| `COMPOSE_PROJECT_NAME` (opcional) | Nombre exclusivo al revisar varios clones; separa contenedores y volumen sin modificar los del otro clon. |
 | `POSTGRES_PASSWORD` | Secreto generado; lo usan tanto Compose como la conexión del backend. |
 | `POSTGRES_PORT`, `DB_PORT` | Ambos `5432`. Si está ocupado, cambiar **ambos** al mismo puerto libre, por ejemplo `5433`. |
 | `DB_HOST`, `DB_USERNAME` | `localhost`, `gymtrack`: Node se ejecuta en el host. |
@@ -178,15 +187,20 @@ npm run db:migrate:test
 npm run build
 npm run lint
 npm run typecheck
+npx cross-env NODE_ENV=test npm run db:seed:carga --workspace backend
 npm test
 ```
+
+La carga de test se prepara antes de `npm test` o de ejecutar `npm run test:e2e` por separado:
+la suite E2E incluye `rendimiento-500.spec.ts`, que necesita esa cuenta con 500 entrenamientos.
+Repetir el comando de carga reemplaza únicamente los datos de esa cuenta sintética en test.
 
 El build previo es necesario incluso para `test:backend`: T060 abre el frontend compilado para
 comprobar almacenamiento y cookies en Chrome real. `npm test` ejecuta en orden dominio, backend,
 frontend y E2E. `npm run test:e2e` reconstruye backend/frontend, inicia sus propios servidores HTTPS
 sobre `gymtrack_test` y los cierra; no reutiliza servidores de desarrollo. Usa Chrome instalado
 (`channel: chrome`), viewport 360×800 y validación de certificados activa. No hace falta descargar
-el Chromium de Playwright para este perfil. Los arneses crean sus fixtures; no necesitan sembrar
+el Chromium de Playwright para este perfil. Los demás arneses crean sus fixtures; no necesitan sembrar
 una cuenta personal ni ejecutar antes el recorrido manual.
 
 | Comando desde la raíz | Cobertura / requisitos |
@@ -309,7 +323,9 @@ No hay despliegue remoto ni automatización de ese despliegue incluidos en esta 
 | Accesibilidad y navegadores T059 | [Calidad](e2e/resultados/calidad.md). **Pendiente** de completar evidencia. |
 
 Los informes conservan sus fechas y entornos; sus resultados no equivalen a verificar este clon.
-T061 (usabilidad), T061B (lectura independiente de este README) y T062 (puerta final) siguen pendientes.
+Las sesiones humanas de usabilidad siguen pendientes (n=0), aunque T061 está marcada en tasks
+por indicación de la usuaria. T061B (lectura independiente) y T062 (puerta final) siguen sin aprobar;
+sus informes enlazados conservan los fallos y resultados de la repetición técnica.
 SC-009 requiere un mes real de observación; no se declara cumplido mediante pruebas automatizadas.
 
 Para T061B, I4 debe seguir **solo este README** en un clon de la revisión acordada, sin reutilizar

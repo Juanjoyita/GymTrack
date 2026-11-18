@@ -71,7 +71,7 @@ describe('shell móvil', () => {
     await renderizarEn(ruta);
 
     const titulo = ruta === '/historial' ? textos.historial.titulo : nombre;
-    expect(screen.getByRole('heading', { level: 1, name: titulo })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { level: 1, name: titulo })).toBeInTheDocument();
     const navegacion = screen.getByRole('navigation', { name: textos.navegacion.etiqueta });
     expect(within(navegacion).getByRole('link', { name: nombre })).toHaveAttribute('aria-current', 'page');
     expect(document.title).toBe(`${titulo} · ${textos.app.nombre}`);
