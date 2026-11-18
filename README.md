@@ -5,6 +5,7 @@ Proyecto académico con cinco historias: **P1** cuenta/sesión y registro de eje
 repeticiones, pesos y notas; **P2** historial, filtros, edición y eliminación; **P3** progreso,
 volumen y récords; **P4** preferencias kg/lb y zona horaria, recuperación por correo,
 exportación JSON/CSV y eliminación de cuenta; **P5** rutinas propias por día e inicio desde plantilla.
+video demostracion: https://www.youtube.com/watch?v=QUXAg-g6A_I
 
 Stack: React 18, TypeScript, Tailwind CSS 4 y Vite 6; NestJS 11, TypeORM 0.3 y PostgreSQL 16;
 npm workspaces (`frontend`, `backend`, `packages/domain`) y API REST. El dominio comparte
